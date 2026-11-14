@@ -1,7 +1,7 @@
 import { encodeFunctionData, type Abi, type Address, type ContractFunctionArgs, type ContractFunctionName, type Hex } from "viem";
 import { config } from "../config";
 import { client } from "./client";
-import { ethCall } from "./rpc";
+import { ethCall } from "../../../shared/rpc";
 import type { Eip1193 } from "./wallet";
 
 /**

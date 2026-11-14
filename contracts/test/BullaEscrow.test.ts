@@ -344,7 +344,7 @@ describe("BullaEscrow", () => {
       const due = (await time.latest()) + 3600;
       await escrow.connect(seller).createInvoice(buyer.address, await fot.getAddress(), AMOUNT, due, ethers.ZeroHash, FIXTURE_CONTAINER_ID, "");
       await fot.connect(buyer).approve(await escrow.getAddress(), AMOUNT);
-      await expect(escrow.connect(buyer).fundInvoice(1)).to.be.revertedWithCustomError(escrow, "InvalidAmount");
+      await expect(escrow.connect(buyer).fundInvoice(1)).to.be.revertedWithCustomError(escrow, "TransferShortfall").withArgs(AMOUNT, AMOUNT - AMOUNT / 100n);
     });
   });
 

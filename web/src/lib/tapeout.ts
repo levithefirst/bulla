@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { config } from "../config";
 import { client } from "./client";
-import { resolveTapeName, XLAYER_TAPEOUT } from "./tapeoutCore";
+import { resolveTapeName, XLAYER_TAPEOUT } from "../../../shared/tapeoutCore";
 
 /** Seller's TapeOut name for a container. Only on X Layer mainnet, the only chain with documented TapeOut addresses. */
 export function useTapeName(container: Address | null) {

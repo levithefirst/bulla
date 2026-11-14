@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Hex } from "viem";
 import { explorerTx } from "../config";
 import { client } from "./client";
-import { waitForReceipt } from "./rpc";
+import { waitForReceipt } from "../../../shared/rpc";
 import { useToasts } from "../components/Toasts";
 import { parseError } from "./errors";
 

@@ -3,7 +3,7 @@ import { erc20Abi, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { config } from "../config";
 import { client } from "./client";
-import { ethCall, getLogs, latestTimestamp } from "./rpc";
+import { ethCall, getLogs, latestTimestamp } from "../../../shared/rpc";
 import { MOCK_INVOICES, MOCK_TOKEN } from "./mock";
 
 export const STATE_NAMES = ["None", "Draft", "Funded", "Submitted", "Released", "Refunded", "Cancelled"] as const;

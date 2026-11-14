@@ -44,7 +44,7 @@ Draft --fund(buyer)--> Funded --submit(seller)--> Submitted --release(buyer)--> 
 | `claimRefund(id)` | buyer | Funded, Submitted | `now >= due` | returns `totalAmount` to buyer, no fee |
 | `mutualCancel(id)` | seller or buyer | Draft, Funded, Submitted | any | records this party's consent; when both have consented → Cancelled, refund buyer if funded, no fee |
 | `setFeeRecipient(addr)` | owner | n/a | n/a | changes fee recipient only |
-| `getInvoice(id)`, `quoteRelease(amount)`, `invoiceCount()` | anyone | n/a | n/a | views |
+| `getInvoice(id)`, `quoteRelease(amount)`, `invoiceCount()`, `totalHeld()` | anyone | n/a | n/a | views |
 
 Notes on the time-lock: the buyer can refund after `dueTimestamp` even if the seller already submitted. That is the v1 rule: the seller should pick a due date that leaves the buyer review time, and the buyer can release any time before or after the due date as long as they have not refunded. Funding and submitting are blocked at or after the due date so nobody starts work on an already-refundable invoice.
 
@@ -55,21 +55,40 @@ fee = totalAmount * feeBps / 10_000     (integer division, rounds down)
 net = totalAmount - fee
 ```
 
+`quoteRelease` uses OpenZeppelin `Math.mulDiv`, so it cannot overflow for any `uint256` amount.
+
 Example at 50 bps with a 6-decimal token: 250.000000 → fee 1.250000, net 248.750000. 1.000000 → fee 0.005000. Amounts below 200 base units pay zero fee. Fees are only taken on `releaseFunds`; refunds and cancels return the full amount.
 
 ## Events
 
-`InvoiceCreated`, `InvoiceFunded`, `DeliverySubmitted`, `FundsReleased(id, seller, net, fee)`, `FeePaid(id, feeRecipient, fee)` (only when fee > 0), `Refunded`, `CancelConsentGiven`, `InvoiceCancelled(id, refundedToBuyer)`, `FeeRecipientUpdated`.
+`EscrowConfigured(token, feeRecipient, feeBps, owner)` (constructor), `InvoiceCreated`, `InvoiceFunded`, `DeliverySubmitted`, `FundsReleased(id, seller, net, fee)`, `FeePaid(id, feeRecipient, fee)` (only when fee > 0), `Refunded`, `CancelConsentGiven`, `InvoiceCancelled(id, refundedToBuyer)`, `FeeRecipientUpdated`.
+
+## Custom errors
+
+Every revert is a custom error: `ZeroAddress`, `FeeTooHigh(feeBps)`, `UnsupportedToken(token)`, `InvalidAmount` (zero amount), `TransferShortfall(expected, received)` (fee-on-transfer or rebasing token at funding), `InvalidBuyer`, `DueInPast`, `MissingContainerId`, `MissingDeliveryHash`, `InvoiceNotFound(id)`, `NotSeller`, `NotBuyer`, `NotParty`, `WrongState(current)`, `PastDue`, `NotYetDue(dueTimestamp)`, `AlreadyConsented`, plus OpenZeppelin's `OwnableUnauthorizedAccount`, `ReentrancyGuardReentrantCall`, and SafeERC20 errors. The web app maps each to a plain-English message.
+
+## Accounting
+
+`totalHeld` is the sum of `totalAmount` over invoices in Funded or Submitted. It rises on `fundInvoice` and falls on release, refund, and a funded cancel. `token.balanceOf(escrow) >= totalHeld` always; it is equal unless someone transfers tokens to the contract directly (those are stuck: there is deliberately no sweep function, so the owner can never move funds).
 
 ## Safety properties (tested)
 
 - State is written before any token transfer (checks-effects-interactions), and every transfer path is `nonReentrant`. A malicious token that re-enters `releaseFunds` or `claimRefund` during a transfer makes the whole transaction revert (`ReentrancyGuardReentrantCall`), and balances are unchanged.
 - Each invoice can pay out once: double release, release after refund, refund after release and double fund all revert with `WrongState`.
 - Only the buyer can fund, release and refund; only the seller can submit; only the two parties can cancel. The owner cannot call any of these on someone else's behalf.
-- Wrong token: `createInvoice` rejects any token other than the configured one (`UnsupportedToken`); fee-on-transfer tokens are rejected at funding.
+- Wrong token: `createInvoice` rejects any token other than the configured one (`UnsupportedToken`); fee-on-transfer tokens are rejected at funding (`TransferShortfall`).
 
-## The circuit container id is a binding, not a VM
+## Fuzz and invariant tests
 
-`circuitContainerId` (`bytes32`) records which TapeOut circuit container the seller binds the invoice to: normally the container's ERC-6551 account address, left-padded to 32 bytes (see `docs/tapeout-binding.md`). The contract stores and emits it; it does not call TapeOut, verify ownership of the circuit, or execute any NAND/LATCH logic. There is no hidden circuit VM. The id tells a reader of the receipt which on-chain container (and DeWEB site) the seller operates under. Control of funds is determined only by the seller and buyer addresses stored in the invoice.
+`contracts/test/BullaEscrow.invariants.test.ts` is a seeded, reproducible stateful random walk (Hardhat has no built-in invariant runner, so the harness is explicit). Each run deploys a fresh escrow with a fee in 0..1000 bps, two sellers, two buyers and a stranger, then takes random steps: create (sometimes invalid), fund, submit, release, refund, cancel, unknown ids, wrong callers, and time warps. After **every** step it checks:
 
-Known v1 limits: no partial milestones per invoice (create one invoice per milestone), no dispute arbitration beyond the time-lock and mutual cancel, a token that blocklists the seller or fee recipient can block release (the buyer can still refund after the due date), and the contract has not been audited.
+1. `token.balanceOf(escrow) == totalHeld == sum(totalAmount of Funded/Submitted invoices)`
+2. no invoice state goes backwards, and a closed state (Released, Refunded, Cancelled) never changes
+3. every release pays `fee == floor(amount * feeBps / 10000)`, so `fee <= amount * feeBps / 10000`, and seller plus fee recipient receive exactly the escrowed amount
+4. refunds and funded cancels return the full amount to the buyer with no fee
+
+A final check asserts the walks reached every state. A separate fuzz test checks `quoteRelease` for random and extreme amounts (up to `2^256 - 1`) at several fee rates. Defaults: 6 runs × 120 steps (`npm test`). Larger campaign: `FUZZ_RUNS=20 FUZZ_STEPS=300 FUZZ_SEED=20261114 npx hardhat test test/BullaEscrow.invariants.test.ts`.
+
+## Static analysis
+
+Slither 0.11.6 reports are in `docs/slither.md`. The first run found 0 high, 1 medium (an `incorrect-equality` false positive on the enum existence check in `getInvoice`) and 5 low. The existence check is now a range check on the sequential id (`id == 0 || id > invoiceCount`), and a re-run reports 0 high, 0 medium and 4 low; the lows are the intended `block.timestamp` due-date comparisons. Slither is not an audit.

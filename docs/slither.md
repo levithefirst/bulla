@@ -47,3 +47,11 @@ The `fundInvoice` report also quotes `token.balanceOf(address(this)) - beforeBal
 
 - A second-person review or a professional audit is still listed as nice-to-have in `docs/HANDOFF.md` before Demo Day. This run is not an audit.
 - Foundry is still optional; Hardhat remains the chosen toolchain.
+
+## Re-run after hardening (14 Nov 2026, Claude Code build sandbox)
+
+Same tool version (`slither-analyzer` 0.11.6) and the same command, against the hardened contract (NatSpec, `TransferShortfall` error, `EscrowConfigured` event, `totalHeld` accounting, `Math.mulDiv` fee).
+
+Change made for the medium finding: although the `incorrect-equality` hit on `getInvoice` was a false positive (enum, not a balance), the existence check no longer compares the enum. Invoice ids are sequential from 1, so `_get` now reverts with `InvoiceNotFound(id)` when `id == 0 || id > invoiceCount`, and `getInvoice` reuses `_get`. Behavior is identical (covered by the existing `InvoiceNotFound` tests and the fuzz walks, which also hit unknown ids).
+
+Result: **0 high, 0 medium, 4 low, 0 informational** (24 contracts analyzed with 102 detectors). The 4 lows are the intended `block.timestamp` due-date comparisons in `createInvoice`, `submitDelivery`, `fundInvoice`, and `claimRefund` described above. The previous mis-tagged `getInvoice` timestamp entry is gone.

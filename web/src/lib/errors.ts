@@ -1,9 +1,10 @@
 import { BaseError } from "viem";
-import { ContractRevert } from "./rpc";
+import { ContractRevert } from "../../../shared/rpc";
 
 const FRIENDLY: Record<string, string> = {
   UnsupportedToken: "This escrow only accepts its configured token.",
-  InvalidAmount: "Amount is invalid (zero, or the token delivered less than the invoice amount).",
+  InvalidAmount: "Amount must be greater than zero.",
+  TransferShortfall: "The token delivered less than the invoice amount (fee-on-transfer tokens are not supported).",
   InvalidBuyer: "Buyer address is invalid (empty or the same as the seller).",
   DueInPast: "The due date must be in the future.",
   MissingContainerId: "A TapeOut circuit container id is required.",
