@@ -1,8 +1,8 @@
 # Bulla: verified research (X Layer + TapeOut)
 
-Verified: Saturday 14 November 2026. Each row cites the page opened in this session. Anything not confirmed from a primary source is marked **UNKNOWN** and the code uses a clearly named placeholder. `docs/planning/research.md` is the earlier lead list and is not authority.
+Verified: Saturday 14 November 2026. Each row cites the page or probe opened in this session. Anything not confirmed from a primary source is marked **UNKNOWN** and the code uses a clearly named placeholder. `docs/planning/research.md` is the earlier lead list and is not authority.
 
-Note: outbound JSON-RPC to `rpc.xlayer.tech` and `testrpc.xlayer.tech` was blocked by this build container's network policy (HTTP 403 from the sandbox proxy, not from X Layer). On-chain reads (symbol/decimals, TapeOut contract code) were therefore NOT executed here. Run `npm run probe:network` and `npm run probe:tapeout` from a normal machine to confirm.
+On-chain probes were run on 14 Nov 2026 (Africa/Lagos) against `https://rpc.xlayer.tech` (chain 196) and `https://testrpc.xlayer.tech/terigon` (chain 1952). Raw outputs are pasted below. The earlier build sandbox could not reach those RPCs; that limitation no longer applies to these reads.
 
 ## 1. X Layer network
 
@@ -16,7 +16,7 @@ Source: https://web3.okx.com/onchainos/dev-docs/xlayer/developer/build-on-xlayer
 | Gas token | OKB | OKB |
 | Explorer | `https://www.okx.com/web3/explorer/xlayer` | `https://www.okx.com/web3/explorer/xlayer-test` |
 
-Explorer link forms used by the app: `<explorer>/address/<addr>` and `<explorer>/tx/<hash>` (the `/address/` form is used by Circle's own X Layer links below; the `/tx/` form is the standard OKX explorer path but was not separately confirmed: treat as **UNKNOWN until clicked once**).
+Explorer link forms used by the app: `<explorer>/address/<addr>` and `<explorer>/tx/<hash>`. The `/address/` form is used by Circle's own X Layer links below. The `/tx/` form is the official explorer's own path: requesting `https://www.okx.com/web3/explorer/xlayer/tx/<hash>` for a live mainnet transaction (`0x8cf2bf1158e08d7f2f2aec48b81065c18b577b729c6a297efa7ce8aeea545a11`, block 75907823) returned HTTP 301 to `https://web3.okx.com/explorer/xlayer/tx/<same hash>`. The rendered page was behind a Cloudflare challenge from this machine, so a click after the first testnet tx is still a good UX check.
 
 Chain ID 195 (old testnet) is not used anywhere in this repo.
 
@@ -29,11 +29,38 @@ Source: https://developers.circle.com/stablecoins/usdc-contract-addresses (Circl
 | X Layer mainnet | USDC | `0xB6CEceAB302E2E4948951eE7843FC24E92933061` | https://www.okx.com/web3/explorer/xlayer/address/0xB6CEceAB302E2E4948951eE7843FC24E92933061 |
 | X Layer testnet | USDC (testnet) | `0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3` | https://www.okx.com/web3/explorer/xlayer-test/address/0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3 |
 
-- Decimals: Circle USDC is a 6-decimal token; the on-chain `decimals()` call on X Layer was **not executed in this session (UNKNOWN until `npm run probe:network` prints it)**. The UI always reads `decimals()` from chain and never hard-codes 6.
-- Symbol: expected `USDC`; on-chain `symbol()` likewise unprobed.
+- Decimals and symbol: confirmed on chain by `npm run probe:network` on 14 Nov 2026 (Africa/Lagos). Both mainnet and testnet return `name=USDC`, `symbol=USDC`, `decimals=6`. The UI still always reads `decimals()` from chain and never hard-codes 6.
 - Lead not used: `https://usdt0.to/ecosystem/x-layer` lists USDT0 at `0x779Ded0c9e1022225f8E0630b35a9b54bE713736`. Not cross-checked against an OKX/X Layer page this session, so not adopted.
 
-**Mainnet token decision gate:** the escrow token is constructor-injected. Mainnet deploy must not run until a human (a) runs `npm run probe:network` with `ESCROW_TOKEN=0xB6Ce...3061` against `https://rpc.xlayer.tech` and sees `symbol=USDC`, `decimals=6`, and (b) records that output in `docs/HANDOFF.md`. Local and e2e use `MockERC20` (symbol `mUSDC`, 6 decimals).
+**Mainnet token decision gate:** passed. The escrow token is constructor-injected. `npm run probe:network` with `ESCROW_TOKEN=0xB6CEceAB302E2E4948951eE7843FC24E92933061` against `https://rpc.xlayer.tech` printed `symbol=USDC`, `decimals=6` (output below and in `docs/HANDOFF.md` step 1). Local and e2e use `MockERC20` (symbol `mUSDC`, 6 decimals).
+
+Probe output, X Layer mainnet (block 75907725):
+
+```
+rpc        https://rpc.xlayer.tech
+chainId    196
+block      75907725
+token      0xB6CEceAB302E2E4948951eE7843FC24E92933061
+  name     USDC
+  symbol   USDC
+  decimals 6
+  supply   91955562.00556
+  balanceOf(0x0000000000000000000000000000000000000001) = 0 USDC
+```
+
+Probe output, X Layer testnet (block 46217923):
+
+```
+rpc        https://testrpc.xlayer.tech/terigon
+chainId    1952
+block      46217923
+token      0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3
+  name     USDC
+  symbol   USDC
+  decimals 6
+  supply   19002.364771
+  balanceOf(0x0000000000000000000000000000000000000001) = 0 USDC
+```
 
 ## 3. TapeOut on X Layer
 
@@ -54,9 +81,22 @@ Primary source: TapeOut's official open-source repo https://github.com/TapeOutPr
 | Processor factory | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
 | Container opener | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
 | SiteRegistry (proxy) | `0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6` |
-| DomainBinding (proxy) | `0x68809Fd2fb343aa57D0aeB7f33Defe477c9666f9` |
+| DomainBinding (proxy) | `0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9` |
 
-TapeOut on X Layer **testnet (1952)**: **UNKNOWN**. No testnet addresses are published in TapeKit. Bulla's testnet deploy uses a fixture container id; real binding is mainnet-only.
+TapeOut on X Layer **testnet (1952)**: still **UNKNOWN**. Re-checked 14 Nov 2026 against TapeKit `kernel/src/config.js` (`NETWORKS` is only BNB Smart Chain mainnet, X Layer mainnet 196, and Base mainnet 8453) and a recursive file list of https://github.com/TapeOutProtocol/TapeKit (no `1952` or testnet deployment). Bulla's testnet deploy uses a fixture container id; real binding is mainnet-only.
+
+Probe output, X Layer mainnet (`npm run probe:tapeout`, 14 Nov 2026). A first run failed `monthlyFee` because the DomainBinding address in the script used a bad EIP-55 checksum (`...fb343aa57...` instead of `...fb343aA57...`); the script now checksums addresses with `getAddress` before calling. After that fix:
+
+```
+factory        0x1f09DAeFA827f02CBb40967cc91b259763760761 code OK
+opener         0x536adD8F30f03b69f6fbF29d425A816A0dC50106 code OK
+siteRegistry   0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6 code OK
+domainBinding  0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9 code OK
+processors     419
+cpuAt(0)       0x839bdD6fa7A66416A609A735e11DE5411B98574e
+monthlyFee     0 wei (native OKB) per 30 days
+```
+
 
 ### Read-only interfaces confirmed (SPEC Appendix B)
 
@@ -67,15 +107,15 @@ TapeOut on X Layer **testnet (1952)**: **UNKNOWN**. No testnet addresses are pub
 - SiteRegistry: `fileInfo(container, path)`, `read`, `readRange`, `pathCount`, `pathsRange`, `paths`, `fallbackPath`, `isOpenedContainer(address) → bool`
 - DomainBinding: `isLive(name, container)`, `isContainerLive(container)`, `containerPaidUntil(container)`, `monthlyFee()`, `bind(name, container, months)` payable
 
-Write calls on SiteRegistry (README handbook §3B): `putFile(container, path, contentType, sha256Hash, firstChunk)` (≤ 24,000 bytes), `appendChunk(container, path, expectIndex, chunk)`, `setFallback(container, path)`, `removeFile(container, path)`, signed by the holder or an operator set with `setOperator`. Exact ABI types of these write functions: **UNKNOWN** (signatures only described in prose). Bulla does not script writes.
+Write calls on SiteRegistry (README handbook §3B): `putFile(container, path, contentType, sha256Hash, firstChunk)` (≤ 24,000 bytes), `appendChunk(container, path, expectIndex, chunk)`, `setFallback(container, path)`, `removeFile(container, path)`, signed by the holder or an operator set with `setOperator`. Exact ABI types of these write functions: still **UNKNOWN** (signatures only described in prose; not in SPEC Appendix B). Bulla does not script writes.
 
 ### How to mint or reuse a circuit, and open a container
 
-- Fab X (https://fabx.tech/en/, X Layer): "Collect transistors: Mint NAND and LATCH" → "Design and tape out: connect gates on the canvas ... then mint it as a circuit NFT" (canvas at https://fabx.tech/en/canvas). This is a community miner built on TapeOut on X Layer, not the protocol team.
-- TapeKit README: "You need, in this order: a TapeOut circuit (an NFT on some processor), its container **opened** (through the container opener; the HashPort console does this for you), and then files written under it."
-- The function that opens a container on the opener (name, arguments, fee): **UNKNOWN**. Not in SPEC Appendix B (read-only only). Do it in an official UI.
-- Official TapeOut minting app URL: **UNKNOWN**. The community guide https://tapeout.link/guide/hashport (not confirmed as official) says a "community container factory" does "pick number → mint → tape out → open container" with 1 NAND, and names HashPort as `hashport.ai`. Treat as a lead.
-- Programmatic tape-out (compiling a netlist and minting from a script): **UNKNOWN**. No SDK on npm; TapeKit roadmap says `@tapekit/kernel` on npm and a publishing CLI are "Next". Do not invent one.
+- Official TapeOut app (https://www.tapeout.net/, opened 14 Nov 2026): the protocol's own site. Design and tape-out (mint) is at https://www.tapeout.net/canvas (HTTP 200). Open or create a container at https://www.tapeout.net/containers (HTTP 200). Related routes: `/circuits`, `/create`, `/processors`. The app treats X Layer as a first-class chain (chain id 196, symbol OKB, home tab "X Layer · Base", factory address matches TapeKit). Per-circuit container pages use `/container/<chain>/<cpu>/<id>`.
+- Official opener write ABI, taken from the official app bundle at https://www.tapeout.net/app/assets/index-B42CEsqR.js (the script loaded by `/containers`): `open(address circuits, uint256 tokenId) payable returns (address)`, `FEE() view returns (uint256)`, and `event Opened(address indexed circuits, uint256 indexed tokenId, address indexed account, address payer)`. These write signatures are still absent from TapeKit SPEC Appendix B (read-only only). Open the container in the official UI; do not invent a broadcast script.
+- Fab X (https://fabx.tech/en/, canvas https://fabx.tech/en/canvas) remains a community miner on TapeOut / X Layer, not the protocol team.
+- TapeKit README: "You need, in this order: a TapeOut circuit (an NFT on some processor), its container **opened** (through the container opener; the HashPort console does this for you), and then files written under it." HashPort itself is BNB Chain only (see below), so on X Layer use the official TapeOut UI, not HashPort.
+- Programmatic tape-out (compiling a netlist and minting from a script): still **UNKNOWN**. No SDK on npm; TapeKit roadmap says `@tapekit/kernel` on npm and a publishing CLI are "Next". Do not invent one.
 
 ### Publishing a static site to DeWEB
 
@@ -86,17 +126,17 @@ From TapeKit README "Site owner handbook":
 3. Publish either via the **HashPort console** (pick circuit, upload folder, two wallet signatures; it computes hashes, splits chunks, sets fallback) or by direct `SiteRegistry` calls (above).
 4. For client-side routing set `fallbackPath` to `index.html`. Bulla uses hash routing (`#/invoice/1`) so it also works in the preview viewer.
 5. To be "100% on-chain": no `https://` references in HTML/CSS, no off-chain fetches. Chain reads through the wallet provider or the configured public nodes are allowed. (Bulla makes RPC calls to X Layer nodes; those are chain data.)
-6. Activation: clients only display activated names; `DomainBinding.bind(name, container, months)`. README price is in BNB for BSC; X Layer `monthlyFee()` value: **UNKNOWN** (read it on chain before paying).
+6. Activation: clients only display activated names; `DomainBinding.bind(name, container, months)`. README price is 0.08 BNB per 30 days on BNB Smart Chain. X Layer `monthlyFee()` was read on chain on 14 Nov 2026 and returned **0 wei** (native OKB) per 30 days. Re-read before paying: a zero fee can change if the proxy implementation is upgraded. The DomainBinding proxy's ERC-1967 implementation was `0x5ebf29b80789e548907c707530c3c7607c4347df`, which matches TapeKit `kernel/src/config.js` `expectedImpl` for this proxy.
 7. Files above 8,400,000 bytes are never read; chunk = 24,000 bytes.
 
-HashPort support for X Layer containers: **UNKNOWN** (the guide describes uploads to BNB Chain). If HashPort does not support X Layer, the fallback is the community uploader or direct `SiteRegistry` calls on X Layer, which a human must perform.
+HashPort support for X Layer containers: **no** (as of 14 Nov 2026). Official pages https://www.hashport.ai/ and https://www.hashport.ai/app say "Store your dapp frontend on BNB Chain", "No other network, no other token, no other wallet", uploads cost "BNB Chain gas", and files are written as "read-only code contract[s] on BNB Chain mainnet". The console tells users with no container to open one for "0.012 BNB" on tapeout.net. There is no X Layer mention on those pages. For X Layer, publish with direct `SiteRegistry` calls on X Layer (a human must perform them) or another tool that actually targets chain 196. Do not assume HashPort will upload to X Layer.
 
 Publishing CLI: **none exists** (roadmap item). Bulla does not wrap or invent `tapekit` CLI flags.
 
 ### How a layperson opens a DeWEB site
 
 - Official HTTPS gateway: `https://tapekit.org/` (README: "Official gateway live at tapekit.org"). BSC example: `https://4246-0.tapekit.org/` for `4246.0.tape`.
-- Gateway hostname for an **X Layer** name (`<id>.2.<cpu>.tape`): **UNKNOWN**. By analogy it may be `https://<id>-2-<cpu>.tapekit.org/`, but this is not stated anywhere; use the gateway home page's name box (`https://tapekit.org/?open=<name>` is the documented site-search shortcut form `https://<gateway domain>/?open=%s`).
+- Gateway hostname for an **X Layer** name (`<id>.2.<cpu>.tape`): **confirmed**. Official TapeKit `kernel/src/name.js` (opened 14 Nov 2026) documents the gateway host as `<#ID>-<processor>.<gateway>` on BNB Smart Chain or `<#ID>-<area>-<processor>.<gateway>` on other chains, with the examples `4246-0.tapekit.org` and `1-2-344.tapekit.org`. `formatHostLabel` joins `[tokenId, area, cpu]` with hyphens when an area code is set; X Layer is area 2. The official Service Worker gateway (`sw-gateway/boot.js`) parses that same form and names X Layer area 2. So a site named `1.2.344.tape` is `https://1-2-344.tapekit.org/`, and in general `https://<id>-2-<cpu>.tapekit.org/`. The documented site-search shortcut remains `https://tapekit.org/?open=<name>`. After publish, confirm the live URL opens (clients only display activated names).
 - Other readers: Chrome extension (keyword `tape`), `web+tape://` links, preview viewer; desktop `tape://` app is planned.
 
 ## 4. Architecture (Bulla)
@@ -105,18 +145,21 @@ Publishing CLI: **none exists** (roadmap item). Bulla does not wrap or invent `t
 
 ## 5. Event
 
-Source: https://web3.okx.com/xlayer/build-x-series (see `docs/planning/research.md`, reviewed earlier the same day). Deadline 7 Dec 2026 23:59 UTC; Google Form; websites/apps submit access link + which TapeOut features they use; circuit projects submit processor contract address + circuit ID; optional video ≤ 3 minutes. Not re-opened this session.
+Source: https://web3.okx.com/xlayer/build-x-series, re-opened 14 Nov 2026. Deadline 7 Dec 2026 23:59 UTC. Websites/apps submit access link + which TapeOut features they use; circuit projects submit processor contract address + circuit ID; optional video ≤ 3 minutes.
+
+Official submission form, linked from that page (two `href`s in the official HTML, record only, **not submitted**): https://forms.gle/EoDNbxQ65dev1wFd9 . That short link redirects to https://docs.google.com/forms/d/e/1FAIpQLScyVnDmyzxRyBxszLUWbwV5kVbpmZJ3JS6oyOxqjALRvhR1kg/viewform?usp=send_form . From this machine the form required a Google account to view, so the form title was not independently read. An assistant must not submit as the user.
 
 ## 6. Unknowns summary
 
 | Item | Status | Placeholder used |
 | --- | --- | --- |
-| On-chain USDC `decimals()`/`symbol()` on X Layer | UNKNOWN (probe blocked here) | UI reads from chain |
-| `/tx/` explorer path | UNKNOWN until clicked | `EXPLORER_URL + /tx/` |
-| TapeOut on X Layer testnet | UNKNOWN | `FIXTURE_CONTAINER_ID` |
-| Opener write function to open a container | UNKNOWN | human uses official UI |
-| Official circuit mint app URL | UNKNOWN (leads: fabx.tech canvas, community container factory) | `CIRCUIT_ID_PLACEHOLDER` |
-| HashPort X Layer support | UNKNOWN | human checklist |
-| X Layer gateway hostname | UNKNOWN | `DEWEB_GATEWAY_URL` placeholder |
-| X Layer `DomainBinding.monthlyFee()` | UNKNOWN | read on chain before paying |
-| SiteRegistry write ABI types | UNKNOWN | no scripted writes |
+| On-chain USDC `decimals()`/`symbol()` on X Layer | Confirmed: `USDC` / `6` on mainnet (block 75907725) and testnet (block 46217923) | UI still reads from chain |
+| `/tx/` explorer path | Confirmed as official path via 301 to `web3.okx.com/explorer/xlayer/tx/<hash>` (page body not rendered here) | `EXPLORER_URL + /tx/` |
+| TapeOut on X Layer testnet | Still UNKNOWN (no addresses in TapeKit) | `FIXTURE_CONTAINER_ID` |
+| Official circuit mint / open-container UI | Confirmed: https://www.tapeout.net/canvas and https://www.tapeout.net/containers | human signs in that UI |
+| Opener write function to open a container | Confirmed from official app ABI: `open(address,uint256) payable returns (address)`; `FEE() view returns (uint256)`. Still absent from SPEC Appendix B. Use the official UI. | human uses official UI |
+| HashPort X Layer support | No (BNB Chain only, official HashPort pages 14 Nov 2026) | direct SiteRegistry on X Layer |
+| X Layer gateway hostname | Confirmed: `https://<id>-2-<cpu>.tapekit.org/` (example `https://1-2-344.tapekit.org/` for `1.2.344.tape`) | record the live URL after publish as `DEWEB_GATEWAY_URL` |
+| X Layer `DomainBinding.monthlyFee()` | Confirmed 0 wei (native OKB) per 30 days; re-read before paying | already read; re-read at bind time |
+| SiteRegistry write ABI types | Still UNKNOWN (prose only) | no scripted writes |
+| Official Google Form URL | Confirmed (not submitted): https://forms.gle/EoDNbxQ65dev1wFd9 | human submits later |

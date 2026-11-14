@@ -16,7 +16,7 @@ X Layer TapeOut contracts (TapeKit README, chain 196):
 | Processor factory | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
 | Container opener | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
 | SiteRegistry | `0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6` |
-| DomainBinding | `0x68809Fd2fb343aa57D0aeB7f33Defe477c9666f9` |
+| DomainBinding | `0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9` |
 
 ## Step by step (human, X Layer mainnet)
 
@@ -24,8 +24,8 @@ Programmatic tape-out is **UNKNOWN** (no SDK or CLI is published; TapeKit lists 
 
 1. **Get a circuit (mint or reuse).**
    - Reuse: if you already hold a TapeOut circuit NFT on X Layer, note its processor contract address and `#ID` (from your wallet's NFT view or the explorer).
-   - Mint: Fab X on X Layer documents "Collect transistors: Mint NAND and LATCH" then "Design and tape out: connect gates on the canvas ... then mint it as a circuit NFT" at https://fabx.tech/en/canvas. The official TapeOut minting app URL is **UNKNOWN**; the community guide (https://tapeout.link/guide/hashport) mentions a community "container factory" that does pick number → mint → tape out → open container with 1 NAND. Verify any UI before signing.
-2. **Open the container.** TapeKit: "its container opened (through the container opener; the HashPort console does this for you)". The opener's write function is **UNKNOWN**, so use the UI that minted the circuit or the HashPort console (`hashport.ai`, X Layer support **UNKNOWN**).
+   - Mint: use the official TapeOut canvas at https://www.tapeout.net/canvas (X Layer is a first-class chain in that app). Fab X at https://fabx.tech/en/canvas is a community miner on the same protocol, not the official app. Verify any UI before signing.
+2. **Open the container.** Use the official TapeOut containers page at https://www.tapeout.net/containers. The official app calls `open(address circuits, uint256 tokenId)` payable on the opener and reads `FEE()`. Do this in the official UI (a signature is required). Do not use HashPort for this on X Layer: HashPort's official pages are BNB Chain only (see `docs/research.md` §3).
 3. **Read the container id.** With the circuit in hand:
    ```bash
    X_LAYER_RPC=https://rpc.xlayer.tech \
@@ -49,6 +49,6 @@ Done looks like: `probe:tapeout` prints `opened true`, `holder` equals your wall
 | --- | --- | --- |
 | Circuit container (ERC-6551 identity) | Each invoice stores the seller's container id; the receipt shows it with an explorer link | Implemented (field + UI); real container pending human mint |
 | DeWEB / SiteRegistry hosting | The static Bulla app is packaged for SiteRegistry (relative paths, hash routing, SHA-256 manifest) | Package script done; publish pending human (see `docs/deweb.md`) |
-| TapeKit reader / gateway | Laypeople open the app via the TapeKit HTTPS gateway (`tapekit.org`) | Pending publish; X Layer gateway hostname UNKNOWN |
-| TapeOut read APIs | `probe:tapeout` reads factory/opener/SiteRegistry/DomainBinding on X Layer | Implemented, not executed here (RPC blocked in build sandbox) |
+| TapeKit reader / gateway | Laypeople open the app via the TapeKit HTTPS gateway at `https://<id>-2-<cpu>.tapekit.org/` (official format; example `https://1-2-344.tapekit.org/`) | Pending publish; hostname format confirmed |
+| TapeOut read APIs | `probe:tapeout` reads factory/opener/SiteRegistry/DomainBinding on X Layer | Implemented and executed on mainnet 14 Nov 2026: all four contracts `code OK`, `monthlyFee` 0 wei |
 | TapeSend, FabX mining, TapeCode | Not used | Out of scope for v1 |

@@ -8,7 +8,7 @@
  * Refuses to run on any chain other than 196: TapeOut testnet addresses are UNKNOWN.
  */
 import "dotenv/config";
-import { createPublicClient, http, parseAbi, isAddress, getAddress, pad, type Address } from "viem";
+import { createPublicClient, http, parseAbi, isAddress, getAddress, pad } from "viem";
 
 // Source: https://github.com/TapeOutProtocol/TapeKit README "Mainnet constants" (X Layer and Base column)
 const XLAYER_TAPEOUT = {
@@ -17,7 +17,7 @@ const XLAYER_TAPEOUT = {
   factory: "0x1f09DAeFA827f02CBb40967cc91b259763760761",
   opener: "0x536adD8F30f03b69f6fbF29d425A816A0dC50106",
   siteRegistry: "0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6",
-  domainBinding: "0x68809Fd2fb343aa57D0aeB7f33Defe477c9666f9",
+  domainBinding: "0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9",
 } as const;
 
 const factoryAbi = parseAbi(["function cpuCount() view returns (uint256)", "function cpuAt(uint256) view returns (address)", "function isCPU(address) view returns (bool)"]);
@@ -42,20 +42,33 @@ async function main() {
     process.exit(2);
   }
 
-  for (const [label, addr] of Object.entries(XLAYER_TAPEOUT)) {
-    if (typeof addr !== "string") continue;
-    const code = await client.getCode({ address: addr as Address });
+  const factory = getAddress(XLAYER_TAPEOUT.factory);
+  const opener = getAddress(XLAYER_TAPEOUT.opener);
+  const siteRegistry = getAddress(XLAYER_TAPEOUT.siteRegistry);
+  const domainBinding = getAddress(XLAYER_TAPEOUT.domainBinding);
+
+  for (const [label, addr] of [
+    ["factory", factory],
+    ["opener", opener],
+    ["siteRegistry", siteRegistry],
+    ["domainBinding", domainBinding],
+  ] as const) {
+    const code = await client.getCode({ address: addr });
     console.log(`${label.padEnd(14)} ${addr} ${code && code !== "0x" ? "code OK" : "NO CODE"}`);
   }
 
-  const cpuCount = await client.readContract({ address: XLAYER_TAPEOUT.factory, abi: factoryAbi, functionName: "cpuCount" });
+  const cpuCount = await client.readContract({ address: factory, abi: factoryAbi, functionName: "cpuCount" });
   console.log(`processors     ${cpuCount}`);
   if (cpuCount > 0n) {
-    const cpu0 = await client.readContract({ address: XLAYER_TAPEOUT.factory, abi: factoryAbi, functionName: "cpuAt", args: [0n] });
+    const cpu0 = await client.readContract({ address: factory, abi: factoryAbi, functionName: "cpuAt", args: [0n] });
     console.log(`cpuAt(0)       ${cpu0}`);
   }
-  const fee = await client.readContract({ address: XLAYER_TAPEOUT.domainBinding, abi: bindingAbi, functionName: "monthlyFee" }).catch(() => null);
-  console.log(`monthlyFee     ${fee === null ? "call failed" : `${fee} wei (native OKB) per 30 days`}`);
+  try {
+    const fee = await client.readContract({ address: domainBinding, abi: bindingAbi, functionName: "monthlyFee" });
+    console.log(`monthlyFee     ${fee} wei (native OKB) per 30 days`);
+  } catch (e: any) {
+    console.log(`monthlyFee     call failed: ${e?.shortMessage ?? e?.message ?? String(e)}`);
+  }
 
   const proc = process.env.TAPEOUT_PROCESSOR?.trim();
   const idRaw = process.env.TAPEOUT_CIRCUIT_ID?.trim();
@@ -66,14 +79,14 @@ async function main() {
   if (!isAddress(proc)) die(`TAPEOUT_PROCESSOR is not an address: ${proc}`);
   const processor = getAddress(proc);
   const id = BigInt(idRaw);
-  const isCpu = await client.readContract({ address: XLAYER_TAPEOUT.factory, abi: factoryAbi, functionName: "isCPU", args: [processor] });
+  const isCpu = await client.readContract({ address: factory, abi: factoryAbi, functionName: "isCPU", args: [processor] });
   if (!isCpu) die(`${processor} is not a processor created by the X Layer factory.`);
   const name = await client.readContract({ address: processor, abi: processorAbi, functionName: "name" });
   const owner = await client.readContract({ address: processor, abi: processorAbi, functionName: "ownerOf", args: [id] }).catch(() => die(`no-such-token: #${id}`));
-  const container = await client.readContract({ address: XLAYER_TAPEOUT.opener, abi: openerAbi, functionName: "accountOf", args: [processor, id] });
-  const opened = await client.readContract({ address: XLAYER_TAPEOUT.opener, abi: openerAbi, functionName: "isOpened", args: [processor, id] });
-  const files = await client.readContract({ address: XLAYER_TAPEOUT.siteRegistry, abi: registryAbi, functionName: "pathCount", args: [container] }).catch(() => 0n);
-  const live = await client.readContract({ address: XLAYER_TAPEOUT.domainBinding, abi: bindingAbi, functionName: "isContainerLive", args: [container] }).catch(() => false);
+  const container = await client.readContract({ address: opener, abi: openerAbi, functionName: "accountOf", args: [processor, id] });
+  const opened = await client.readContract({ address: opener, abi: openerAbi, functionName: "isOpened", args: [processor, id] });
+  const files = await client.readContract({ address: siteRegistry, abi: registryAbi, functionName: "pathCount", args: [container] }).catch(() => 0n);
+  const live = await client.readContract({ address: domainBinding, abi: bindingAbi, functionName: "isContainerLive", args: [container] }).catch(() => false);
 
   console.log(`\nprocessor      ${processor} (${name})`);
   console.log(`circuit #ID    ${id}`);

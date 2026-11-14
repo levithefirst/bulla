@@ -30,10 +30,10 @@ Prerequisites: escrow deployed and in `contracts/deployments.json` (rebuild afte
 
 1. Run `npm run deweb:package` and read `deweb-out/PUBLISH-CHECKLIST.md`.
 2. Upload `deweb-out/site/` with either:
-   - **HashPort console** (hosted, wallet-signed, computes hashes and chunks). X Layer support: UNKNOWN.
-   - **Direct calls** to X Layer `SiteRegistry` `0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6`: `putFile` per file, `appendChunk` for extra chunks, optional `setFallback(container, "index.html")`. Use the content types and SHA-256 values from `manifest.json`.
-3. Activation (if the reader requires it): `DomainBinding.bind(name, container, months)`; read `monthlyFee()` on X Layer first (UNKNOWN value).
-4. Verify on the gateway: open `https://tapekit.org/`, enter the name `<#ID>.2.<processorNumber>.tape`, then check `/.tape/status` shows every file verified. The direct X Layer gateway hostname is UNKNOWN; record the URL the gateway gives you.
+   - **Direct calls** to X Layer `SiteRegistry` `0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6`: `putFile` per file, `appendChunk` for extra chunks, optional `setFallback(container, "index.html")`. Use the content types and SHA-256 values from `manifest.json`. This is the X Layer path, because HashPort's official pages (https://www.hashport.ai/ and https://www.hashport.ai/app) are BNB Chain only.
+   - **HashPort console** only if it later adds X Layer support. Do not use it for an X Layer container today.
+3. Activation (if the reader requires it): `DomainBinding.bind(name, container, months)` on the X Layer proxy `0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9`. `monthlyFee()` read 0 wei (native OKB) per 30 days on 14 Nov 2026; re-read immediately before paying.
+4. Verify on the gateway: the official X Layer hostname is `https://<id>-2-<cpu>.tapekit.org/` (TapeKit `kernel/src/name.js`; example `https://1-2-344.tapekit.org/` for `1.2.344.tape`). You can also open `https://tapekit.org/?open=<name>`. Then check `/.tape/status` shows every file verified. Record the live URL.
 
 ## Record the published site
 

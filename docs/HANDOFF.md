@@ -1,26 +1,27 @@
 # Bulla handoff: what is not done
 
-Written 14 Nov 2026 at the end of the autonomous build. Deadline: 7 Dec 2026, 23:59 UTC. Everything below is **not done**. Nothing here was signed, deployed, minted, published, funded, recorded, or submitted. `docs/handoff/phase-1.md` is superseded by this build (its scaffold now exists).
+Written 14 Nov 2026 at the end of the autonomous build, and updated the same day after the step 1 probes. Deadline: 7 Dec 2026, 23:59 UTC. Step 1 research is recorded below. Nothing here was signed, deployed, minted, published, funded, recorded as a demo, or submitted. `docs/handoff/phase-1.md` is superseded by this build (its scaffold now exists).
 
 What is done and verified in this session: `npm install`, `npm run compile`, `npm test` (30 passing), `npm run build` (static relative-path tree), `npm run deploy:local` (writes `contracts/deployments.json`), `npm run e2e` (5 passing on a local Hardhat node: no-wallet receipt, happy path, timeout refund, mutual cancel, parsed revert), `npm run deweb:package` (no problems; warns that mainnet escrow is not deployed). Testnet and mainnet deploy scripts were run only without a key and refused (dry run).
 
-Build environment limits that caused some of the items below: this sandbox could not reach X Layer RPCs (`rpc.xlayer.tech`, `testrpc.xlayer.tech` were refused by the sandbox egress proxy), could not download the Foundry installer or native solc (so the repo uses Hardhat + the `solc` npm package), and has no wallet.
+Build environment limits that caused some of the items below: the original Claude Code sandbox could not reach X Layer RPCs (`rpc.xlayer.tech`, `testrpc.xlayer.tech` were refused by the sandbox egress proxy), could not download the Foundry installer or native solc (so the repo uses Hardhat + the `solc` npm package), and has no wallet. Step 1 probes and official-source lookups were later run from a machine that can reach those RPCs (14 Nov 2026, Africa/Lagos). A Slither run is recorded in `docs/slither.md`.
 
 ## Ordered list
 
-### 1. Re-verify the UNKNOWNs (human or assistant with web + RPC access, ~30 min)
+### 1. Re-verify the UNKNOWNs (done 14 Nov 2026, Africa/Lagos, except the live click of a testnet tx)
 
-From `docs/research.md` §6. For each, update `docs/research.md` with the source URL or probe output.
+From `docs/research.md` §6. Outputs and sources are pasted there.
 
-| Item | How | Done looks like |
+| Item | How | Status |
 | --- | --- | --- |
-| USDC `symbol()`/`decimals()` on X Layer mainnet and testnet | `X_LAYER_RPC=https://rpc.xlayer.tech X_LAYER_CHAIN_ID=196 ESCROW_TOKEN=0xB6CEceAB302E2E4948951eE7843FC24E92933061 npm run probe:network` (and testnet with `0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3`, chain 1952, `https://testrpc.xlayer.tech/terigon`) | prints `USDC`, `6`; paste output into research.md; mainnet token gate passed |
-| TapeOut contracts have code on X Layer | `X_LAYER_RPC=https://rpc.xlayer.tech npm run probe:tapeout` | every row says `code OK`; `monthlyFee` printed |
-| Explorer `/tx/<hash>` path | click a tx link in the app after the first testnet tx | page opens; else fix `explorerTx` in `web/src/config.ts` |
-| Official TapeOut mint / open-container UI on X Layer | find the official app (leads: fabx.tech canvas, community container factory, hashport.ai) | URL recorded with source |
-| HashPort X Layer support | open hashport.ai | yes/no recorded |
-| X Layer gateway hostname | after publish, the URL tapekit.org gives for a `<id>.2.<cpu>.tape` name | URL recorded |
-| TapeOut on X Layer testnet | look for published addresses | recorded or stays UNKNOWN (fixture id is fine) |
+| USDC `symbol()`/`decimals()` on X Layer mainnet and testnet | `X_LAYER_RPC=https://rpc.xlayer.tech X_LAYER_CHAIN_ID=196 ESCROW_TOKEN=0xB6CEceAB302E2E4948951eE7843FC24E92933061 npm run probe:network` (and testnet with `0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3`, chain 1952, `https://testrpc.xlayer.tech/terigon`) | **Done.** Mainnet block 75907725 and testnet block 46217923 both printed `name=USDC`, `symbol=USDC`, `decimals=6`. Mainnet token gate passed. |
+| TapeOut contracts have code on X Layer | `X_LAYER_RPC=https://rpc.xlayer.tech npm run probe:tapeout` | **Done.** factory, opener, siteRegistry, and domainBinding all `code OK`. `processors 419`, `cpuAt(0) 0x839bdD6fa7A66416A609A735e11DE5411B98574e`, `monthlyFee 0 wei (native OKB) per 30 days`. A first `monthlyFee` call failed on a bad EIP-55 checksum in the probe (`...fb343aa57...`); fixed to `0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9`. |
+| Explorer `/tx/<hash>` path | official explorer redirect, plus a click after the first testnet tx | **Path confirmed.** `https://www.okx.com/web3/explorer/xlayer/tx/<hash>` 301s to `https://web3.okx.com/explorer/xlayer/tx/<same hash>` (sample mainnet tx `0x8cf2bf1158e08d7f2f2aec48b81065c18b577b729c6a297efa7ce8aeea545a11`). The rendered page was behind Cloudflare here; still click a link in the app after the first testnet tx. |
+| Official TapeOut mint / open-container UI on X Layer | official TapeOut site | **Done.** Mint/tape-out: https://www.tapeout.net/canvas . Open container: https://www.tapeout.net/containers . Official app ABI: `open(address circuits, uint256 tokenId) payable returns (address)`, `FEE() view returns (uint256)`. Fab X (https://fabx.tech/en/canvas) is a community miner, not the official app. |
+| HashPort X Layer support | https://www.hashport.ai/ and https://www.hashport.ai/app | **No.** Official pages are BNB Chain only ("Store your dapp frontend on BNB Chain", "No other network"). X Layer publish fallback: direct `SiteRegistry` calls on chain 196. |
+| X Layer gateway hostname | official TapeKit `kernel/src/name.js` and `sw-gateway/boot.js` | **Done.** Format `https://<id>-2-<cpu>.tapekit.org/` (example `https://1-2-344.tapekit.org/` for `1.2.344.tape`). Shortcut `https://tapekit.org/?open=<name>`. Confirm the live URL after publish. |
+| TapeOut on X Layer testnet | TapeKit `kernel/src/config.js` and repo file list | Still **UNKNOWN**. No 1952 addresses published. Fixture id remains correct for testnet. |
+| Official Google Form URL | https://web3.okx.com/xlayer/build-x-series (HTML `href`, record only, not submitted) | **Recorded.** https://forms.gle/EoDNbxQ65dev1wFd9 (redirects to https://docs.google.com/forms/d/e/1FAIpQLScyVnDmyzxRyBxszLUWbwV5kVbpmZJ3JS6oyOxqjALRvhR1kg/viewform?usp=send_form). Form view required a Google account from this machine; not submitted. |
 
 ### 2. Wallets and gas (human)
 
@@ -72,7 +73,7 @@ Replace every `<<…>>` in `docs/SUBMISSION-DRAFT.md`, then submit the Google Fo
 
 ### 11. Nice to have before Demo Day (assistant can do)
 
-- Independent review or audit of `BullaEscrow` (at minimum a second-person review and a Slither run where the tool can be installed).
+- Independent review or audit of `BullaEscrow` (at minimum a second-person review). A first Slither run is in `docs/slither.md`: 0 high, 1 medium (enum existence check in `getInvoice`), 5 low (intentional `block.timestamp` due-date checks). No code changes were made from that run.
 - Foundry port of the tests if Foundry becomes installable (optional; Hardhat is the chosen toolchain).
 - Reduce bundle size (currently ~545 KB JS) to cut DeWEB upload gas.
 - Show the seller's `<#ID>.2.<cpu>.tape` name on receipts by reading `container.token()` and the factory processor list.
