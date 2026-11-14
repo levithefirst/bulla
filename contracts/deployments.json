@@ -1,0 +1,43 @@
+{
+  "networks": {
+    "xlayerTestnet": {
+      "network": "xlayerTestnet",
+      "chainId": 1952,
+      "escrow": null,
+      "token": "0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3",
+      "tokenSymbol": "USDC",
+      "tokenDecimals": null,
+      "feeRecipient": null,
+      "feeBps": 50,
+      "deployedAt": null,
+      "deployBlock": null,
+      "note": "NOT DEPLOYED. Token is Circle's documented testnet USDC; decimals read on chain at runtime."
+    },
+    "xlayerMainnet": {
+      "network": "xlayerMainnet",
+      "chainId": 196,
+      "escrow": null,
+      "token": "0xB6CEceAB302E2E4948951eE7843FC24E92933061",
+      "tokenSymbol": "USDC",
+      "tokenDecimals": null,
+      "feeRecipient": null,
+      "feeBps": 50,
+      "deployedAt": null,
+      "deployBlock": null,
+      "note": "NOT DEPLOYED. Mainnet token decision gate in docs/research.md must pass first."
+    },
+    "localhost": {
+      "network": "localhost",
+      "chainId": 31337,
+      "escrow": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "tokenSymbol": "mUSDC",
+      "tokenDecimals": 6,
+      "feeRecipient": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "feeBps": 50,
+      "deployedAt": "2026-11-14T16:24:45.507Z",
+      "deployBlock": 2,
+      "note": "Local dev only. Dev accounts: #1 seller, #2 buyer, #3 feeRecipient."
+    }
+  }
+}
