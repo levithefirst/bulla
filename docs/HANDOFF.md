@@ -2,7 +2,7 @@
 
 Written 14 Nov 2026 at the end of the autonomous build, and updated the same day after the step 1 probes. Deadline: 7 Dec 2026, 23:59 UTC. Step 1 research is recorded below. Nothing here was signed, deployed, minted, published, funded, recorded as a demo, or submitted. `docs/handoff/phase-1.md` is superseded by this build (its scaffold now exists).
 
-What is done and verified (latest Claude Code run, 14 Nov 2026): `npm install`, `npm run compile`, `npm test` (47 passing: 30 unit, 8 fuzz/invariant incl. a 6-run random walk, 5 TapeOut-name resolver, 4 deployments wiring; a larger 20 × 300-step campaign also passed), `npm run build` (static relative-path tree, JS 334 KB total, down from 548 KB), `npm run check:contrast` (all pairings pass, light and dark), `npm run e2e` (6 passing on a local Hardhat node: no-wallet receipt, happy path, timeout refund, mutual cancel, parsed revert, 375px + keyboard), `npm run deweb:package` (12 files, ~465 KB, no problems; warns that mainnet escrow is not deployed), `npm run screenshots` (12 PNGs in `docs/screenshots/`), Slither re-run (0 high, 0 medium, 4 intended timestamp lows; `docs/slither.md`). `npm run release:check` correctly FAILS today (placeholders, no mainnet escrow, `web/src/deweb.json` empty). Testnet and mainnet deploy scripts were run only without a key and refused (dry run). Nothing was broadcast.
+What is done and verified (latest Claude Code run, 14 Nov 2026): `npm run compile`; `npm test` (50 passing: 30 unit, 8 fuzz/invariant, 5 TapeOut-name resolver, 5 deployments wiring incl. the judge block, 2 DemoUSD); `npm run check:contrast` (all pairings pass, light and dark); `npm run build`; `npm run e2e` (9 passing on a local Hardhat node, including `e2e/judge-mode.spec.ts`: one tap from the landing page to Released in **387 ms in-app / 923 ms wall clock**, limit 10 s; empty gas tank shows a clear message and sends nothing; the own-wallet path still works); `npm run e2e:testnet` skips cleanly without its env; `npm run deweb:package` (12 files, ~470 KB, no judge code, no key); `npm run screenshots` (16 PNGs incl. judge mode). Deploy scripts (`deploy:testnet`, `deploy:mainnet`, `deploy:judge`) were run only without a key and refused. Nothing was broadcast to any real network. `npm run release:check` correctly fails today.
 
 Build environment limits that caused some of the items below: the original Claude Code sandbox could not reach X Layer RPCs (`rpc.xlayer.tech`, `testrpc.xlayer.tech` were refused by the sandbox egress proxy), could not download the Foundry installer or native solc (so the repo uses Hardhat + the `solc` npm package), and has no wallet. Step 1 probes and official-source lookups were later run from a machine that can reach those RPCs (14 Nov 2026, Africa/Lagos). A Slither run is recorded in `docs/slither.md`.
 
@@ -37,6 +37,17 @@ ESCROW_TOKEN=0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3 FEE_RECIPIENT=<<FEE_RECI
 ```
 
 Done: `contracts/deployments.json` `xlayerTestnet.escrow` is set; `ESCROW_ADDRESS=<addr> npm run probe:network` says `has code`; one full invoice run on testnet through the UI (`VITE_BULLA_NETWORK=xlayerTestnet npm run dev`). Commit `deployments.json`. Placeholder: `<<ESCROW_ADDRESS_TESTNET>>`.
+
+### 3b. Judge mode on X Layer testnet (Grok Bot, testnet only)
+
+Judge mode is the one-tap demo on the landing page ("Try it now"): two burner keys created in the visitor's browser run mint, create, fund (lock), submit and release on X Layer testnet with valueless DemoUSD. Owner: **Grok Bot**. See also `docs/SUBMISSION-CHECKLIST.md` items 1 to 4.
+
+1. **Deploy** DemoUSD + the judge escrow with a testnet-only deployer key: `FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> npm run deploy:judge` (refuses any network but `xlayerTestnet`). Commit the `xlayerTestnet.judge` block it writes to `contracts/deployments.json`.
+2. **Gas tank:** create a dedicated throwaway key used for nothing else. Fund it from the official faucet https://web3.okx.com/xlayer/faucet (0.2 OKB per user per day per the X Layer docs). Each judge run tops each burner up to about 700k gas × gas price × 2, so check the tank on the testnet explorer before demos and top up daily if needed. **Never commit the key.**
+3. **Important caveat:** the tank key is passed at build time as `VITE_DEMO_GAS_TANK_KEY` and is therefore embedded in the hosted judge build's JavaScript. Anyone who reads the bundle can spend the tank. That is acceptable only because it is a testnet key holding a few faucet OKB. Keep the balance small, never reuse the key, and **rotate it** (new key, re-fund, rebuild, re-host) if it is drained or after the event. Mainnet builds refuse to compile with the variable set, and `deweb:package` scans for it.
+4. **Build and host** the judge site: `VITE_BULLA_NETWORK=xlayerTestnet VITE_DEMO_GAS_TANK_KEY=… npm run build`, upload `web/dist/` to an HTTPS static host (Fluid's account). Then set `VITE_JUDGE_URL=<that URL>` for the mainnet/DeWEB build so its "Try it now" links there. Placeholder: `<<JUDGE_URL>>`.
+5. **Acceptance on testnet:** `E2E_TESTNET=1 VITE_DEMO_GAS_TANK_KEY=… npm run e2e:testnet`. It requires all 8 steps to link to `https://www.okx.com/web3/explorer/xlayer-test/tx/…` and finish within 60 s (`JUDGE_MAX_MS` to change), and prints the measured time; paste it into the checklist. This could not run in the build sandbox (X Layer RPCs blocked there), so testnet timing is **not yet measured**.
+6. Done looks like: one tap on the hosted judge URL reaches Released, each step's OKX explorer link opens, and an empty tank shows "Demo gas tank empty" rather than a fake success.
 
 ### 4. Mainnet deploy (human, signed, after step 1 token gate)
 
@@ -79,11 +90,17 @@ The build sandbox cannot reach X Layer RPCs, so these were verified only against
 - **Deploy wiring.** After step 3 or 4, `contracts/deployments.json` is written in the schema `web/src/config.ts` reads (`shared/deployments.ts`, tested). Done looks like: `VITE_BULLA_NETWORK=xlayerTestnet npm run build` shows the escrow address in the footer with no code change.
 - **Screenshots** in `docs/screenshots/` show "Localhost (Hardhat)" and mock USDC. Optionally re-shoot against testnet after step 3 for the submission.
 
+### 11b. Submission checklist
+
+`docs/SUBMISSION-CHECKLIST.md` lists every remaining item with an owner (Claude, Grok Bot, Fluid) and dates up to the internal deadline of **6 Dec 2026, 23:59 UTC**. Promo drafts in `docs/promo/PROMO-DRAFTS.md` are marked "draft, needs Fluid's OK"; nothing goes public without Fluid's OK.
+
 ### 12. Nice to have before Demo Day (assistant can do)
 
 - Independent review or audit of `BullaEscrow`. Slither: first run 0 high / 1 medium / 5 low; the medium (enum strict equality, a false positive) was removed by a range check and the re-run is 0 high / 0 medium / 4 low (`docs/slither.md`). The contract also gained full NatSpec, `TransferShortfall`, `EscrowConfigured`, `totalHeld` accounting and an overflow-safe `mulDiv` fee, with seeded fuzz/invariant tests (`docs/contracts.md`).
 - Further bundle cuts if upload gas matters: swapping React for Preact (compat) would save roughly another 120 KB; replacing `@tanstack/react-query` with small hooks about 35 KB. Not done, to avoid a framework change this close to the deadline.
 - Foundry port of the tests if Foundry becomes installable (optional; Hardhat is the chosen toolchain).
+- Find an official OKX developer page for the `window.okxwallet` provider name (research §7 marks it UNKNOWN-official; the generic browser-wallet connector covers OKX Wallet anyway).
+- Judge mode on testnet uses a local fixture container id because TapeOut has no published testnet deployment; if one appears, bind the judge invoices to a real testnet container.
 
 ## Secrets check
 

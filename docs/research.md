@@ -163,3 +163,18 @@ Official submission form, linked from that page (two `href`s in the official HTM
 | X Layer `DomainBinding.monthlyFee()` | Confirmed 0 wei (native OKB) per 30 days; re-read before paying | already read; re-read at bind time |
 | SiteRegistry write ABI types | Still UNKNOWN (prose only) | no scripted writes |
 | Official Google Form URL | Confirmed (not submitted): https://forms.gle/EoDNbxQ65dev1wFd9 | human submits later |
+
+## 7. Judge mode and sponsor features (added 14 Nov 2026, Claude Code)
+
+Appended for the judge-mode build; sections 1 to 6 above are unchanged.
+
+| Feature | What Bulla wires | Source | Status |
+| --- | --- | --- | --- |
+| X Layer settlement | Escrow on mainnet 196 (real USDC) and testnet 1952 (judge mode, DemoUSD) | §1 network table (official X Layer network information page) | Wired in code; not deployed yet (HANDOFF steps 3, 4, 3b) |
+| X Layer testnet faucet | Grok Bot funds the judge-mode demo gas tank from it | https://web3.okx.com/xlayer/faucet ; official docs https://web3.okx.com/onchainos/dev-docs/xlayer/developer/bridge/get-testnet-okb-from-faucet ("each user can only claim 0.2 OKB per day") | Confirmed. The daily cap bounds the tank: a judge run tops each burner up to about 700k gas × gas price × 2 |
+| OKX explorer deep links | Every tx (toasts, receipt timeline, each judge-mode step) links to `<explorer>/tx/<hash>`; addresses to `<explorer>/address/<addr>` | §1 explorer URLs; `/tx/` path confirmed in §6 (301 to `web3.okx.com/explorer/xlayer/tx/<hash>`) | Mainnet path confirmed; testnet uses the same pattern under `/xlayer-test` (UNKNOWN until the first testnet tx link is clicked) |
+| OKX Wallet connect | Listed first as "Recommended on X Layer"; "Get OKX Wallet" links to the official site when not detected | Official OKX Wallet site https://web3.okx.com/ ("One crypto wallet, 130+ native chains") and https://web3.okx.com/wallet/x-layer (X Layer wallet page) | The injected object name `window.okxwallet` comes from community sources (e.g. Ethereum Stack Exchange); no official OKX developer page for it was found this session: **UNKNOWN (official)**. The generic browser-wallet connector covers OKX Wallet through `window.ethereum` too |
+| Native USDC on X Layer | Real-token mode escrows Circle USDC | §2 (Circle official address list; decimals probed = 6) | Confirmed |
+| TapeOut circuit container + DeWEB | Invoice `circuitContainerId`; seller's `<#ID>.2.<cpu>.tape` name on mainnet receipts; app packaged for SiteRegistry | §3 | Wired; container mint and DeWEB publish are human steps (HANDOFF 5, 6) |
+
+Judge-mode demo gas tank: a dedicated, throwaway, testnet-only key held by Grok Bot. Its private key is embedded in the judge build (it has to sign in the browser), so it must be treated as public: it holds only small faucet amounts, is never reused for anything else, and is rotated if drained. Mainnet builds refuse to compile with it set.

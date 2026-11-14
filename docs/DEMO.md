@@ -1,32 +1,29 @@
-# Bulla demo (video ≤ 3 minutes)
+# Bulla demo video (≤ 3:00)
 
-The video is optional for the form but worth doing. A human records it; nothing here has been recorded. Stats used are only the approved citations in `docs/SUBMISSION-DRAFT.md`.
+The video opens on a live judge-mode escrow release within the first 10 seconds: no intro slides, no logo sting. A human (Fluid) records it; nothing here has been recorded. The only statistics allowed are the three approved citations in `docs/SUBMISSION-DRAFT.md`.
 
-## Setup before recording
+## Before recording
 
-- Escrow deployed on X Layer (or testnet, said out loud on camera) and the published DeWEB build points at it.
-- Two browser profiles: **Seller** (OKX Wallet with a small OKB balance for gas) and **Buyer** (OKX Wallet or MetaMask with OKB for gas and at least 25 USDC).
-- The seller's TapeOut circuit container address copied (from `npm run probe:tapeout`).
-- One invoice already released (for the receipt shot) and one Funded invoice whose due date is a few minutes away, or use the local stack below for the refund path.
-- Screen at 1280×800 or larger, browser zoom 110%, notifications off.
-
-Local fallback (no mainnet funds): `npm run node`, `npm run deploy:local`, `VITE_BULLA_NETWORK=localhost npm run dev`, and import two Hardhat dev accounts into MetaMask. Say on camera that it is a local chain.
+- **Judge build live on X Layer testnet** (HANDOFF step 3b): `xlayerTestnet.judge` deployed, gas tank funded by Grok Bot from the official faucet, judge site hosted. Open it once off camera and run the demo, so you know the tank has gas.
+- **Fresh browser profile** for the take (no wallet extension needed for judge mode). Zoom 110%, 1280×800 or larger, notifications off.
+- **Second tab:** the OKX explorer, ready to receive a tx link.
+- **Third tab (for real mode):** a profile with OKX Wallet, a small OKB balance and a few USDC on X Layer mainnet, and one mainnet invoice already Released if the mainnet escrow is deployed. If it is not, say "real mode uses USDC on mainnet" and show the create form only.
+- **Fallback with no testnet access:** `npm run node`, `npm run deploy:local`, and a localhost judge build (see README). Say on camera that it is a local chain.
 
 ## Script and exact clicks
 
 | Time | Screen | Say | Click / do |
 | --- | --- | --- | --- |
-| 0:00–0:20 | Landing page | "Freelancers get paid late all the time. Bonsai's 2025 data on over 100,000 freelancers found 29% of invoices paid at least a day late, and Remote reports 85% of contractors are paid late at least sometimes. Bulla fixes the default: the client funds first." | Show the landing hero and the four-step flow. |
-| 0:20–0:50 | Seller profile → **Create an invoice** | "I'm the freelancer. I enter my client's address, 25 USDC, a due date, and my TapeOut circuit container. That container is my on-chain identity and it hosts this very app on DeWEB." | Click **Connect wallet → OKX Wallet**, approve. Fill **Buyer address**, **Amount** `25`, **Due date** (+7 days), **Circuit container id** (paste), **Description** `Logo, milestone 1`. Point at the two warnings. Click **Create invoice**, sign. Land on `#/invoice/N`. |
-| 0:50–1:05 | Receipt, then copy link | "This receipt is public. My client needs no account to see it." | Click **Copy receipt link**. Paste into a private window with no wallet: receipt renders, status **Draft**. |
-| 1:05–1:35 | Buyer profile on the receipt | "As the client I approve USDC, then fund. Two clicks. The money now sits in the escrow contract." | **Connect wallet**. In **Fund this invoice**: click **1 · Approve 25 USDC**, sign; click **2 · Fund 25 USDC**, sign. Status → **Funded**; timeline shows the tx link. |
-| 1:35–1:55 | Seller profile | "I deliver and record a hash of the file plus a link." | Reload. **Submit delivery…** → type `logo-final.zip` in **Delivery hash**, paste a link in **Artifact URI** → **Submit**, sign. Status → **Submitted**. |
-| 1:55–2:15 | Buyer profile | "The client sees exactly what the seller gets: 24.875 USDC after a 0.5% fee. Release." | Reload. In **Release funds**, point at fee and net and both warnings. Click **Release … to seller…** → **Confirm release (irreversible)**, sign. Status → **Released**. |
-| 2:15–2:30 | Second invoice (pre-made, past due) or local chain | "If the client never releases, nobody is stuck: after the due date the client can take a full refund." | Open the Funded, past-due invoice as buyer → **Claim refund**, sign → **Refunded**. |
-| 2:30–2:50 | Receipt + footer, then gateway tab | "Business model: 0.5% only on successful release, nothing on refunds. TapeOut: each invoice is bound to the seller's circuit container, and the app is published into that container on DeWEB, opened here through the TapeKit gateway. No backend." | Show the **Circuit container id** row with explorer link, the footer's DeWEB name, the gateway URL bar. |
-| 2:50–3:00 | Landing | "Bulla: milestone escrow invoices on X Layer. v1 is unaudited, and whoever holds the circuit controls its container, so keep that wallet safe." | End on the logo. |
+| 0:00 to 0:10 | Landing (judge build) → judge page | "This is Bulla, milestone escrow on X Layer. One tap." | Click **Try it now: one-tap escrow**. The loop starts immediately: steps tick green, the live invoice goes Draft → Funded → Submitted → **Released**. Stop talking for a beat on "Released". |
+| 0:10 to 0:30 | Judge page | "That was a real escrow on X Layer testnet: two demo wallets created in this browser, money locked, delivery submitted, then released to the freelancer minus a 0.5% fee. Every step is an X Layer transaction." | Point at **Done in … s**, then click one step's **… on OKX Explorer** link; show the tx in the explorer tab for two seconds; come back. |
+| 0:30 to 0:45 | Public receipt | "And here is the receipt anyone can open, no wallet." | Click **Open public receipt #N**. Scroll once: status Released, fee line, delivery hash, timeline with tx links, QR code. |
+| 0:45 to 1:10 | Receipt, then landing | "Why: freelancers get paid late all the time. Bonsai's 2025 data on over 100,000 freelancers found 29% of invoices paid at least a day late, and Remote reports 85% of contractors are paid late at least sometimes. With Bulla the client funds first, and a due-date time-lock refunds them if nothing is released." | Calm scroll on the landing's **How it works**. |
+| 1:10 to 1:40 | Landing → **Advanced: use my own wallet** | "Real mode is the same loop with your own wallet and native USDC on X Layer. OKX Wallet is the recommended option." | Click **Advanced: use my own wallet**, then **Connect wallet**: show **OKX Wallet · Recommended on X Layer** in the menu. Show the form's live summary (deposit, fee, you receive). |
+| 1:40 to 2:05 | Create form / receipt | "Who it's for: freelancers and small studios paid in stablecoins, and their clients. Every invoice is a link the client must open, so each paid invoice brings Bulla to a new client. We earn 0.5% only when a release succeeds; refunds and cancels are free." | Point at the fee line. |
+| 2:05 to 2:40 | Receipt **Escrow record** → footer | "TapeOut is the identity and the home. Each invoice is bound to the seller's TapeOut circuit container; on mainnet the receipt shows the seller's .tape name, and the app itself is published into that container on DeWEB, so receipts are served from X Layer, not from our server." | Point at **Circuit container id** (and **Seller TapeOut name** if live), then the footer's **DeWEB home**. If published, show the TapeKit gateway URL bar. |
+| 2:40 to 3:00 | Judge page or landing | "Bulla: lock, deliver, release, on X Layer. v1 is unaudited, and whoever holds the circuit controls its container, so keep that wallet safe." | End on the Released badge. |
 
 ## After recording
 
-- Trim to ≤ 3:00, export 1080p, upload as unlisted, and put the link in `docs/SUBMISSION-DRAFT.md` (`<<VIDEO_URL>>`).
-- Do not show seed phrases, private keys, or the wallet's full account list on screen.
+- Trim to 3:00 or less; the release must be visible before 0:10. Export 1080p and upload unlisted. Put the link in `docs/SUBMISSION-DRAFT.md` (`VIDEO_URL` placeholder).
+- Never show a seed phrase, a private key, the gas-tank key, or the browser's localStorage on screen.

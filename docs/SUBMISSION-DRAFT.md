@@ -10,6 +10,7 @@ Placeholders are UPPER_CASE names in double angle brackets. Replace every one be
 | --- | --- |
 | Access link (DeWEB, canonical) | `<<DEWEB_GATEWAY_URL>>` (TapeKit gateway URL for `<<CIRCUIT_ID>>.2.<<PROCESSOR_NUMBER>>.tape`) |
 | HTTPS mirror (optional) | `<<HTTPS_MIRROR_URL>>` |
+| Judge mode (testnet, one tap) | `<<JUDGE_URL>>` |
 | Sample receipt | `<<DEWEB_GATEWAY_URL>>#/invoice/<<DEMO_INVOICE_ID>>` |
 | BullaEscrow contract (X Layer, chain 196) | `<<ESCROW_ADDRESS_MAINNET>>` |
 | Escrow token | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` (Circle's X Layer address; confirm with `npm run probe:network` before submitting) |
@@ -65,16 +66,28 @@ Escrow changes the default: the money is committed before work starts, and the r
 - The receipt is a durable, public record of completed paid work that a freelancer can link in a portfolio.
 - No account to lose and no server to go down: the app and records live on X Layer.
 
-## Which TapeOut features we use
+## How Bulla uses X Layer (mirror of the README section)
 
-| Feature | Use in Bulla | Status at submission |
-| --- | --- | --- |
-| Circuit container | Each invoice stores the seller's container id (`circuitContainerId`); receipts link it | `<<DONE / PENDING>>` (contract and UI done) |
-| DeWEB / SiteRegistry | The Bulla app is published into the container's on-chain site | `<<DONE / PENDING>>` |
-| TapeKit gateway | Laypeople open the app and receipts via the gateway, no install | `<<DONE / PENDING>>` |
-| TapeOut read APIs on X Layer | `probe:tapeout` derives and checks the container (factory, opener, SiteRegistry, DomainBinding) | implemented |
+X Layer is the core loop: every lock, delivery and release is an X Layer transaction. Each row is wired in the code; before submitting, update "status" to what is live (`docs/HANDOFF.md`). Sources: `docs/research.md` §1 to §3 and §7.
 
-Not all logic runs in a circuit: escrow and state live in a companion Solidity contract; the circuit container is the identity and the hosting home. Not used: TapeSend, Fab X mining, TapeCode.
+| # | X Layer / OKX feature | What is wired | Where | Status |
+| --- | --- | --- | --- | --- |
+| 1 | **X Layer settlement** (mainnet 196, testnet 1952) | `BullaEscrow` holds funds and state on X Layer; the app reads every receipt straight from an X Layer RPC; the judge-mode loop runs on testnet 1952 | `contracts/`, `web/src/config.ts`, `web/src/judge/` | Code and deploy scripts done; testnet and mainnet deploys pending (human) |
+| 2 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to the X Layer network; "Get OKX Wallet" link when not installed; any other injected wallet still works | `web/src/lib/wallet.tsx`, `web/src/components/Wallet.tsx` | Done (official provider-name doc not found; see research §7) |
+| 3 | **OKX explorer deep links** on every tx | Toasts, the receipt timeline, every judge-mode step and every address link open the OKX X Layer explorer | `web/src/config.ts` (`explorerTx`, `explorerAddress`), `web/src/judge/JudgePage.tsx` | Done; mainnet `/tx/` path confirmed, testnet path to confirm on first click |
+| 4 | **Native USDC on X Layer** for real mode | Real-token escrow is bound to Circle's X Layer USDC (`0xB6Ce…3061`, 6 decimals probed); judge mode uses valueless DemoUSD instead | `contracts/deployments.json`, `contracts/scripts/deploy-xlayer.ts` | Token confirmed; escrow deploy pending |
+| 5 | **TapeOut circuit, container and DeWEB hosting** | Every invoice stores the seller's TapeOut container; mainnet receipts show the seller's `<#ID>.2.<cpu>.tape` name; the app is packaged for the container's SiteRegistry site | `contracts/contracts/BullaEscrow.sol`, `shared/tapeoutCore.ts`, `scripts/deweb-package.ts` | Wired; circuit mint and DeWEB publish pending (human) |
+
+How this maps to the official judging criteria:
+
+- **User value and commercial potential.** Late payment is a common freelancer problem (see "The problem" above). Settlement in native USDC on X Layer (rows 1, 4) means the client funds up front and the freelancer is paid on release; Bulla earns 0.5% only on successful releases.
+- **Innovation.** The escrow's identity and its public receipt live in the seller's TapeOut container on DeWEB (row 5), not on a server; judge mode shows a full escrow loop with no wallet setup, in one tap (row 1).
+- **Ecosystem integration.** Five X Layer and OKX pieces are used together: X Layer settlement, OKX Wallet, the OKX explorer, native USDC, and TapeOut container plus DeWEB (rows 1 to 5).
+- **Product readiness and UX.** One tap from the landing page runs lock, deliver and release on X Layer testnet, with an OKX explorer link per step; the local acceptance test does it in under a second (limit 10 s). Receipts need no wallet; real mode uses OKX Wallet (rows 2, 3).
+
+Judge-mode link for judges (testnet, one tap): `<<JUDGE_URL>>`.
+
+Not all logic runs in a circuit: escrow and state live in a companion Solidity contract on X Layer; the TapeOut container is the identity and the hosting home. Not used: TapeSend, Fab X mining, TapeCode.
 
 ## Risks and honesty notes
 
