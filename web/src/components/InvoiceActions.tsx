@@ -37,13 +37,13 @@ export function FundInvoiceButton({ inv, token, chainNow }: Props) {
     <div className="action" data-testid="fund-panel">
       <h3>Fund this invoice</h3>
       <p>
-        Deposit <strong>{amt}</strong> into escrow. Two steps: approve the token, then fund.
+        Deposit <strong className="num">{amt}</strong> into escrow. Two steps: approve the token, then fund.
       </p>
       <UnauditedWarning />
       <CircuitHolderWarning />
       {balance !== undefined && (
         <p className="muted">
-          Your balance: {fmtAmount(balance, token.decimals, token.symbol)} · approved: {fmtAmount(allowance, token.decimals, token.symbol)}
+          Your balance: <span className="num">{fmtAmount(balance, token.decimals, token.symbol)}</span> · approved: <span className="num">{fmtAmount(allowance, token.decimals, token.symbol)}</span>
         </p>
       )}
       {short && <div className="error">Not enough {token.symbol} to fund.</div>}
@@ -143,15 +143,15 @@ export function ReleaseFundsButton({ inv, token, escrow }: Props) {
         <tbody>
           <tr>
             <th>Escrowed</th>
-            <td>{f(inv.totalAmount)}</td>
+            <td className="num">{f(inv.totalAmount)}</td>
           </tr>
           <tr>
             <th>Bulla fee ({(escrow.feeBps / 100).toFixed(2)}%)</th>
-            <td data-testid="release-fee">{f(fee)}</td>
+            <td className="num" data-testid="release-fee">{f(fee)}</td>
           </tr>
           <tr>
             <th>Seller receives</th>
-            <td data-testid="release-net">
+            <td className="num" data-testid="release-net">
               <strong>{f(net)}</strong>
             </td>
           </tr>

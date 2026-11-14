@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { config } from "../config";
 import { ConnectButton, NetworkBanner } from "./Wallet";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Layout({ children }: { children: ReactNode }) {
   const d = config.deweb;
@@ -16,6 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </span>
         <nav className="nav">
           <a href="#/create">New invoice</a>
+          <ThemeToggle />
         </nav>
         <ConnectButton />
       </header>

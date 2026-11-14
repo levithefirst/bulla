@@ -5,6 +5,7 @@ import { parseError } from "../lib/errors";
 import { NotConfiguredError, quoteFee, stateName, useChainNow, useEscrowInfo, useInvoice, useInvoiceTxs, useTokenInfo, type Invoice, type TxRef } from "../lib/invoice";
 import { InvoiceActions } from "../components/InvoiceActions";
 import { Warnings } from "../components/Warnings";
+import { StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
 
 function AddrLink({ a, testid }: { a: string; testid?: string }) {
   const href = explorerAddress(a);
@@ -34,25 +35,26 @@ function TxLink({ tx }: { tx?: TxRef }) {
 function Timeline({ inv, txs }: { inv: Invoice; txs: TxRef[] }) {
   const tx = (ev: string) => [...txs].reverse().find((t) => t.event === ev);
   const final = stateName(inv.state);
-  const steps: { label: string; at: bigint; done: boolean; tx?: TxRef; note?: string }[] = [
-    { label: "Created (Draft)", at: inv.createdAt, done: true, tx: tx("InvoiceCreated") },
-    { label: "Funded", at: inv.fundedAt, done: inv.fundedAt > 0n, tx: tx("InvoiceFunded") },
-    { label: "Delivery submitted", at: inv.submittedAt, done: inv.submittedAt > 0n, tx: tx("DeliverySubmitted") },
+  // Each completed step takes the status color of the state it entered (see STATE_STATUS).
+  const steps: { label: string; at: bigint; kind: StatusKind | null; tx?: TxRef; note?: string }[] = [
+    { label: "Created (Draft)", at: inv.createdAt, kind: "pending", tx: tx("InvoiceCreated") },
+    { label: "Funded", at: inv.fundedAt, kind: inv.fundedAt > 0n ? "funded" : null, tx: tx("InvoiceFunded") },
+    { label: "Delivery submitted", at: inv.submittedAt, kind: inv.submittedAt > 0n ? "funded" : null, tx: tx("DeliverySubmitted") },
   ];
-  if (final === "Released") steps.push({ label: "Released to seller", at: inv.closedAt, done: true, tx: tx("FundsReleased") });
-  else if (final === "Refunded") steps.push({ label: "Refunded to buyer (time-lock)", at: inv.closedAt, done: true, tx: tx("Refunded") });
-  else if (final === "Cancelled") steps.push({ label: "Cancelled by both parties", at: inv.closedAt, done: true, tx: tx("InvoiceCancelled") });
-  else steps.push({ label: "Released or refunded", at: 0n, done: false, note: `refund opens ${fmtTime(inv.dueTimestamp)}` });
+  if (final === "Released") steps.push({ label: "Released to seller", at: inv.closedAt, kind: "released", tx: tx("FundsReleased") });
+  else if (final === "Refunded") steps.push({ label: "Refunded to buyer (time-lock)", at: inv.closedAt, kind: "disputed", tx: tx("Refunded") });
+  else if (final === "Cancelled") steps.push({ label: "Cancelled by both parties", at: inv.closedAt, kind: "disputed", tx: tx("InvoiceCancelled") });
+  else steps.push({ label: "Released or refunded", at: 0n, kind: null, note: `refund opens ${fmtTime(inv.dueTimestamp)}` });
 
   return (
     <ol className="timeline" data-testid="timeline">
       {steps.map((s) => (
-        <li key={s.label} className={s.done ? "done" : "todo"}>
-          <span className="dot" />
+        <li key={s.label} className={s.kind ? `done step-${s.kind}` : "todo"} data-status={s.kind ?? "todo"}>
+          <span className="dot">{s.kind && <StatusIcon kind={s.kind} />}</span>
           <div>
-            <strong>{s.label}</strong>
+            <span className="step-label">{s.label}</span>
             <div className="muted">
-              {s.done ? fmtTime(s.at) : s.note ?? "pending"} <TxLink tx={s.tx} />
+              {s.kind ? fmtTime(s.at) : s.note ?? "pending"} <TxLink tx={s.tx} />
             </div>
           </div>
         </li>
@@ -103,13 +105,11 @@ export function InvoicePage({ idParam }: { idParam: string }) {
           <div>
             <div className="muted small">Bulla invoice · {config.chain.name}</div>
             <h1>
-              Invoice #{i.id.toString()}
+              Invoice <span className="num">#{i.id.toString()}</span>
             </h1>
             {i.memo && <p className="memo">{i.memo}</p>}
           </div>
-          <span className={`state state-${state.toLowerCase()}`} data-testid="state">
-            {state}
-          </span>
+          <StatusBadge state={state} testid="state" />
         </header>
 
         <div className="amount-big" data-testid="amount">
@@ -120,16 +120,16 @@ export function InvoicePage({ idParam }: { idParam: string }) {
           <tbody>
             <tr>
               <th>Fee on release ({(feeBps / 100).toFixed(2)}%)</th>
-              <td data-testid="fee">{f(fee)}</td>
+              <td className="num" data-testid="fee">{f(fee)}</td>
             </tr>
             <tr>
               <th>Seller receives on release</th>
-              <td data-testid="net">{f(net)}</td>
+              <td className="num" data-testid="net">{f(net)}</td>
             </tr>
             <tr>
               <th>Due / refund time-lock</th>
               <td>
-                {fmtTime(i.dueTimestamp)} {chainNow >= i.dueTimestamp ? <span className="tag">passed</span> : null}
+                <span className="num">{fmtTime(i.dueTimestamp)}</span> {chainNow >= i.dueTimestamp ? <span className="tag">passed</span> : null}
               </td>
             </tr>
             <tr>

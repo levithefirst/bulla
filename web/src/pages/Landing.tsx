@@ -2,6 +2,9 @@ import { useState } from "react";
 import { navigate } from "../router";
 import { Warnings } from "../components/Warnings";
 import { config } from "../config";
+import { StatusIcon, type StatusKind } from "../components/Status";
+
+const FLOW_KIND: StatusKind[] = ["pending", "funded", "funded", "released"];
 
 export function Landing() {
   const [id, setId] = useState("");
@@ -45,7 +48,12 @@ export function Landing() {
         ].map(([t, d], i) => (
           <div className="flow-step" key={t}>
             <span className="flow-n">{i + 1}</span>
-            <h3>{t}</h3>
+            <h3>
+              <span className={`status status-${FLOW_KIND[i]}`} aria-hidden="true">
+                <StatusIcon kind={FLOW_KIND[i]} />
+              </span>
+              {t}
+            </h3>
             <p>{d}</p>
           </div>
         ))}

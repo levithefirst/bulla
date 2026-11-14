@@ -22,7 +22,7 @@ Writes (gitignored) `deweb-out/`:
 - `bulla-site.tar.gz`: the same files
 - `PUBLISH-CHECKLIST.md`: generated step list with the hash table
 
-The script fails if a file has an unknown content type, exceeds the limit, is a source map, has a non-ASCII name, or if HTML/CSS reference off-chain URLs. It warns if no escrow address exists for the target network. Current build: about 560 KB in 6 files (28 chunks).
+The script fails if a file has an unknown content type, exceeds the limit, is a source map, has a non-ASCII name, or if HTML/CSS reference off-chain URLs. It warns if no escrow address exists for the target network. Current build: about 670 KB in 10 files, including the self-hosted Geist fonts.
 
 ## Publish to the circuit container (human)
 

@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo.png" alt="Bulla" width="120" /></p>
+<p align="center"><img src="assets/logo-clay.png" alt="Bulla" width="120" /></p>
 
 # Bulla
 
@@ -50,7 +50,7 @@ web/         Vite + React + TypeScript + wagmi/viem static app
 scripts/     probe-network, probe-tapeout, deweb-package, e2e runner, test-key generator, ABI export
 e2e/         Playwright specs and the injected test wallet
 docs/        research, contracts, TapeOut binding, DeWEB, submission draft, demo script, handoff
-assets/      logo.png
+assets/      logo-clay.png (brand mark), logo.png (monochrome original)
 ```
 
 ## Install, test, run, build
@@ -84,6 +84,8 @@ npm run e2e                       # prints [e2e] RESULT: PASS / FAIL
 DeWEB package: `npm run deweb:package` → `deweb-out/` (see `docs/deweb.md`).
 
 Probes (read-only): `npm run probe:network`, `npm run probe:tapeout`.
+
+Theme: colors, fonts and status hues follow [`docs/design/color-theme.md`](docs/design/color-theme.md) (tokens in `web/src/styles.css`, light, dark via `prefers-color-scheme`, and a manual Auto/Light/Dark toggle). `npm run check:contrast` verifies every pairing the UI uses against the theme targets.
 
 ## Environment variables
 
