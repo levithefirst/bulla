@@ -1,3 +1,5 @@
+> **Status (14 Nov 2026):** executed. The scaffold, contract, UI, e2e and docs now exist; remaining human work is in `docs/HANDOFF.md`.
+
 # Phase 1 Claude Code prompt (Bulla)
 
 Paste everything between the markers into Claude Code, run from a clone of the private repo:
