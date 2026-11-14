@@ -1,0 +1,10 @@
+{
+  "_comment": "Fill in after publishing to DeWEB (docs/deweb.md). Shown in the app footer. null = not published yet.",
+  "tapeName": null,
+  "processor": null,
+  "circuitId": null,
+  "container": null,
+  "gatewayUrl": null,
+  "siteManifestSha256": null,
+  "publishedAt": null
+}

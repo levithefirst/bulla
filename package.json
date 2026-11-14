@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "description": "Bulla: milestone invoices with on-chain escrow on X Layer",
-  "workspaces": ["contracts", "web"],
+  "workspaces": [
+    "contracts",
+    "web"
+  ],
   "scripts": {
     "compile": "npm run compile -w contracts",
     "test": "npm run test -w contracts",
@@ -18,13 +21,14 @@
     "probe:tapeout": "tsx scripts/probe-tapeout.ts",
     "deweb:package": "npm run build && tsx scripts/deweb-package.ts",
     "e2e:keys": "tsx scripts/gen-test-keys.ts",
-    "e2e": "tsx scripts/run-e2e.ts"
+    "e2e": "tsx scripts/run-e2e.ts",
+    "abi": "npm run compile && node scripts/export-abi.cjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "dotenv": "^16.4.5",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
-    "viem": "^2.21.0",
-    "dotenv": "^16.4.5",
-    "@playwright/test": "1.63.0"
+    "viem": "^2.21.0"
   }
 }
