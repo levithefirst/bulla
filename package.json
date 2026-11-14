@@ -23,7 +23,9 @@
     "e2e:keys": "tsx scripts/gen-test-keys.ts",
     "e2e": "tsx scripts/run-e2e.ts",
     "abi": "npm run compile && node scripts/export-abi.cjs",
-    "check:contrast": "tsx scripts/check-contrast.ts"
+    "check:contrast": "tsx scripts/check-contrast.ts",
+    "release:check": "tsx scripts/release-check.ts",
+    "screenshots": "tsx scripts/screenshots.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

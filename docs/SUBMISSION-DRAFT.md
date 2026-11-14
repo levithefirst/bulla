@@ -2,7 +2,7 @@
 
 Form: Google Form linked from https://web3.okx.com/xlayer/build-x-series. Deadline 7 Dec 2026, 23:59 UTC. A human submits; nothing here has been submitted.
 
-Placeholders are in `<<ANGLE_BRACKETS>>`. Replace every one before submitting.
+Placeholders are UPPER_CASE names in double angle brackets. Replace every one before submitting; `npm run release:check` lists any that remain.
 
 ## Links and identifiers
 

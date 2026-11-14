@@ -79,7 +79,7 @@ async function main() {
   console.log("  BullaEscrow   :", address, "block", receipt?.blockNumber);
 
   writeDeployment({
-    network: name,
+    network: name as "xlayerTestnet" | "xlayerMainnet",
     chainId: Number(net.chainId),
     escrow: address,
     token,

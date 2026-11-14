@@ -1,4 +1,5 @@
-import { defineChain, getAddress, isAddress, type Address, type Chain } from "viem";
+import { defineChain, type Chain } from "viem";
+import { NETWORK_KEYS, resolveDeployment, type DeploymentsFile, type NetworkKey } from "../../shared/deployments";
 import deployments from "../../contracts/deployments.json";
 import dewebJson from "./deweb.json";
 
@@ -28,18 +29,15 @@ export const localhost = defineChain({
   testnet: true,
 });
 
-type NetworkKey = "localhost" | "xlayerTestnet" | "xlayerMainnet";
 const CHAINS: Record<NetworkKey, Chain> = { localhost, xlayerTestnet: xLayerTestnet, xlayerMainnet: xLayerMainnet };
 
-type Dep = { escrow: string | null; token: string | null; tokenSymbol: string | null; feeBps: number; deployBlock: number | null };
-
-function addr(v: string | null | undefined): Address | null {
-  return v && isAddress(v) ? getAddress(v) : null;
-}
-
-const networkKey = ((import.meta.env.VITE_BULLA_NETWORK as NetworkKey) || "xlayerMainnet") as NetworkKey;
-if (!(networkKey in CHAINS)) throw new Error(`Unknown VITE_BULLA_NETWORK "${networkKey}"`);
-const dep = ((deployments as { networks: Record<string, Dep> }).networks[networkKey] ?? null) as Dep | null;
+const networkKey = (import.meta.env.VITE_BULLA_NETWORK || "xlayerMainnet") as NetworkKey;
+if (!NETWORK_KEYS.includes(networkKey)) throw new Error(`Unknown VITE_BULLA_NETWORK "${networkKey}"`);
+// contracts/deployments.json is written by the deploy scripts in the same shared schema.
+const dep = resolveDeployment(deployments as DeploymentsFile, networkKey, {
+  escrow: import.meta.env.VITE_ESCROW_ADDRESS,
+  token: import.meta.env.VITE_ESCROW_TOKEN,
+});
 
 const chain = CHAINS[networkKey];
 export const config = {
@@ -48,11 +46,11 @@ export const config = {
   isXLayer: networkKey !== "localhost",
   rpcUrl: import.meta.env.VITE_RPC_URL || chain.rpcUrls.default.http[0],
   explorer: chain.blockExplorers?.default.url ?? null,
-  escrow: addr(import.meta.env.VITE_ESCROW_ADDRESS) ?? addr(dep?.escrow),
-  token: addr(import.meta.env.VITE_ESCROW_TOKEN) ?? addr(dep?.token),
-  tokenSymbolHint: dep?.tokenSymbol ?? null,
-  feeBpsHint: dep?.feeBps ?? 50,
-  deployBlock: dep?.deployBlock != null ? BigInt(dep.deployBlock) : 0n,
+  escrow: dep.escrow,
+  token: dep.token,
+  tokenSymbolHint: dep.tokenSymbol,
+  feeBpsHint: dep.feeBps,
+  deployBlock: import.meta.env.VITE_DEPLOY_BLOCK ? BigInt(import.meta.env.VITE_DEPLOY_BLOCK) : dep.deployBlock,
   mock: import.meta.env.VITE_MOCK === "1",
   deweb: dewebJson,
 };
