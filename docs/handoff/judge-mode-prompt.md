@@ -1,0 +1,18 @@
+Continue on branch ccr-0289a6a3-a6gku1 in levithefirst/bulla. Pull and rebase first, and never overwrite Grok Bot's research docs. This is an approved winning-pattern addendum: winners show one tight everyday loop in 10 seconds, avoid heavy onboarding, and use the sponsor tech deeply.
+
+1) JUDGE MODE (X Layer testnet, chain 1952 only). Add a "Try it now" button on the landing page that runs a real on-chain demo escrow with no wallet-setup wall:
+- In the browser, generate two throwaway burner keys (Freelancer and Client) and keep them in localStorage, labeled demo-only. Show the role switcher clearly.
+- Deploy (via the testnet deploy script) a DemoUSD MockERC20 with a capped public mint, used only in judge mode. Real-token mode stays USDC.
+- Gas: a testnet-only "demo gas tank" address funds each new burner with a tiny amount of testnet OKB. Its key must never be committed. Read it from a build-time env var VITE_DEMO_GAS_TANK_KEY that is set only for the judge build. Document in HANDOFF that Grok Bot funds the tank from the faucet and can rotate it. The judge build refuses to run on any chain except 1952. If the tank is empty, show a clear "demo gas tank empty" message, never a fake success.
+- One tap runs: mint DemoUSD, create invoice, fund (lock), submit delivery, approve and release. Each step is a real testnet tx and shows its OKX explorer link. The Funded to Released status change is visible live.
+- Add an "Advanced: use my own wallet" path that keeps the existing OKX Wallet and injected flow.
+
+2) SPONSOR DEPTH. X Layer is the core loop. Use and visibly surface at least three distinct X Layer and OKX features, each one real and sourced in docs/research.md: X Layer settlement (mainnet 196 and testnet 1952), OKX Wallet connect as the first-class option, OKX explorer deep links on every tx, native USDC on X Layer for real mode, and TapeOut circuit, container, and DeWEB hosting. Add a README section, "How Bulla uses X Layer", that maps each feature to the judging criteria point by point, and mirror it in SUBMISSION-DRAFT.md. Do not claim any feature that isn't actually wired up.
+
+3) ACCEPTANCE TEST. Add a Playwright test, judge-mode.spec, that goes from landing through the full lock, submit, approve, release loop to the Released status with tx links shown, and asserts it finishes in under 10 seconds. Run it on the local node in CI mode (auto-mining, a local gas tank) and keep it green. Also add an opt-in npm run e2e:testnet that runs the same flow against 1952 when the env var is set, and skips cleanly otherwise. Report the measured local time.
+
+4) DEMO. Rewrite docs/DEMO.md and the video script to open on a live judge-mode escrow release within the first 10 seconds, with no intro slides. Then cover the problem (using only the approved citations), users and the business model, and TapeOut and X Layer use. Keep it to 3 minutes or less.
+
+5) SUBMISSION CHECKLIST. Add docs/SUBMISSION-CHECKLIST.md, due Dec 6, 2026, 23:59 UTC, with an owner for each item (Claude, Grok Bot, or Fluid): video, a clean-browser live-link test of both DeWEB and HTTPS, the README sponsor section, submission text mapped to each criterion, and promo drafts (X post and thread) marked "draft, needs Fluid's OK". Nothing goes public without Fluid's OK.
+
+Hard rules still apply: never commit any key, never touch mainnet funds, judge mode is testnet-only, and never change repo visibility. Re-run compile, tests, check:contrast, e2e (including judge-mode.spec), build, and deweb:package. Commit as levithefirst <304593143+levithefirst@users.noreply.github.com> and push to the same branch. Report the judge-mode timing, what's wired up per sponsor feature, and anything new for HANDOFF.
