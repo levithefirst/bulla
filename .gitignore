@@ -7,3 +7,19 @@ cache/
 broadcast/
 dist/
 .DS_Store
+# Hardhat / build outputs
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+*.tsbuildinfo
+# E2E: throwaway local keys and reports (never commit keys)
+e2e/.keys.json
+*.keys.json
+test-results/
+playwright-report/
+deweb-out/
+# Wallet / key material, belt and braces
+*.pem
+*.key
+keystore/
