@@ -1,10 +1,11 @@
 import { CreateInvoiceForm } from "../components/CreateInvoiceForm";
+import { QueryProvider } from "../lib/query";
 import { navigate } from "../router";
 
-export function CreatePage() {
+export default function CreatePage() {
   return (
-    <div className="narrow">
+    <QueryProvider>
       <CreateInvoiceForm onCreated={(id) => navigate(`/invoice/${id}`)} />
-    </div>
+    </QueryProvider>
   );
 }

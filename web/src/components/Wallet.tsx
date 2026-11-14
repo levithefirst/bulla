@@ -1,29 +1,41 @@
-import { useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { useEffect, useRef, useState } from "react";
 import { config } from "../config";
 import { shortAddr } from "../lib/format";
 import { parseError } from "../lib/errors";
+import { CONNECTORS, useWallet } from "../lib/wallet";
 import { useToasts } from "./Toasts";
 
 export function useWrongNetwork() {
-  const { isConnected, chainId } = useAccount();
-  return isConnected && chainId !== config.chain.id;
+  return useWallet().wrongNetwork;
 }
 
 export function ConnectButton() {
-  const { address, isConnected } = useAccount();
-  const { connectors, connectAsync, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
+  const w = useWallet();
   const [open, setOpen] = useState(false);
   const toasts = useToasts();
+  const ref = useRef<HTMLDivElement>(null);
 
-  if (isConnected && address) {
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  if (w.isConnected && w.address) {
     return (
       <div className="wallet">
-        <span className="wallet-addr mono" data-testid="connected-address" title={address}>
-          {shortAddr(address)}
+        <span className="wallet-addr mono" data-testid="connected-address" title={w.address} aria-label={`Connected wallet ${w.address}`}>
+          <span className="wallet-dot" aria-hidden="true" />
+          {shortAddr(w.address)}
         </span>
-        <button className="btn btn-ghost btn-sm" onClick={() => disconnect()}>
+        <button className="btn btn-ghost btn-sm" onClick={() => w.disconnect()}>
           Disconnect
         </button>
       </div>
@@ -31,33 +43,29 @@ export function ConnectButton() {
   }
 
   return (
-    <div className="wallet">
-      <button className="btn btn-sm" onClick={() => setOpen((o) => !o)} disabled={isPending} data-testid="connect-wallet">
-        {isPending ? "Connecting…" : "Connect wallet"}
+    <div className="wallet" ref={ref}>
+      <button className="btn btn-sm" onClick={() => setOpen((o) => !o)} disabled={w.isConnecting} aria-haspopup="menu" aria-expanded={open} data-testid="connect-wallet">
+        {w.isConnecting ? "Connecting…" : "Connect wallet"}
       </button>
       {open && (
-        <div className="wallet-menu" role="menu">
-          {connectors.map((c) => (
+        <div className="wallet-menu" role="menu" aria-label="Choose a wallet">
+          {CONNECTORS.map((c) => (
             <button
-              key={c.uid}
+              key={c.id}
               className="wallet-option"
               role="menuitem"
               data-testid={`connector-${c.id}`}
               onClick={async () => {
                 setOpen(false);
                 try {
-                  await connectAsync({ connector: c });
+                  await w.connect(c.id);
                 } catch (e) {
-                  const msg = parseError(e);
-                  toasts.push({
-                    kind: "error",
-                    title: `Could not connect ${c.name}`,
-                    body: /provider/i.test(msg) ? `${c.name} was not detected in this browser.` : msg,
-                  });
+                  toasts.push({ kind: "error", title: `Could not connect ${c.name}`, body: parseError(e) });
                 }
               }}
             >
-              {c.name}
+              <span>{c.name}</span>
+              {!c.get() && <span className="muted small">not detected</span>}
             </button>
           ))}
         </div>
@@ -67,24 +75,27 @@ export function ConnectButton() {
 }
 
 export function NetworkBanner() {
-  const wrong = useWrongNetwork();
-  const { chainId } = useAccount();
-  const { switchChainAsync, isPending } = useSwitchChain();
+  const w = useWallet();
   const toasts = useToasts();
-  if (!wrong) return null;
+  const [busy, setBusy] = useState(false);
+  if (!w.wrongNetwork) return null;
   return (
-    <div className="banner banner-wrong" data-testid="wrong-network">
+    <div className="banner banner-wrong" data-testid="wrong-network" role="alert">
       <span>
-        Wrong network: your wallet is on chain {chainId}. Bulla runs on <strong>{config.chain.name}</strong> (chain {config.chain.id}).
+        Wrong network: your wallet is on chain <span className="num">{w.chainId}</span>. Bulla runs on <strong>{config.chain.name}</strong> (chain{" "}
+        <span className="num">{config.chain.id}</span>).
       </span>
       <button
         className="btn btn-sm"
-        disabled={isPending}
+        disabled={busy}
         onClick={async () => {
+          setBusy(true);
           try {
-            await switchChainAsync({ chainId: config.chain.id });
+            await w.switchChain();
           } catch (e) {
             toasts.push({ kind: "error", title: `Switch to ${config.chain.name} failed`, body: parseError(e) });
+          } finally {
+            setBusy(false);
           }
         }}
       >

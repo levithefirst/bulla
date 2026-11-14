@@ -13,6 +13,8 @@ export function useRoute(): string {
     const on = () => {
       setRoute(get());
       window.scrollTo(0, 0);
+      // Move focus to the new page for keyboard and screen-reader users.
+      requestAnimationFrame(() => document.getElementById("main")?.focus({ preventScroll: true }));
     };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);

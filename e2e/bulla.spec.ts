@@ -96,6 +96,10 @@ test("happy path: create -> fund -> submit -> release", async ({ browser }) => {
   await expect(anon.getByTestId("amount")).toHaveText("250 mUSDC");
   await expect(anon.getByTestId("fee")).toHaveText("1.25 mUSDC");
   await expect(anon.getByTestId("actions-connect")).toBeVisible();
+  await expect(anon.locator(".share svg.qr")).toBeVisible();
+  await expect(anon.getByTestId("copy-link")).toBeVisible();
+  await expect(anon.getByTestId("container-id")).toHaveText(/b0110a00$/);
+  await expect(anon.getByTestId("state").locator("..")).toHaveAttribute("data-status", "pending");
 
   await fundAsBuyer(buyer, id);
 
@@ -168,6 +172,7 @@ test("mutual cancel after funding refunds buyer", async ({ browser }) => {
   await expect(buyer.getByTestId("cancel-btn")).toContainText("Confirm cancel");
   await buyer.getByTestId("cancel-btn").click();
   await expect(buyer.getByTestId("state")).toHaveText("Cancelled");
+  await expect(buyer.getByTestId("state").locator("..")).toHaveAttribute("data-status", "neutral");
   expect((await bal(keys.buyer.address)) - before).toBe(40_000_000n);
 });
 
@@ -186,4 +191,18 @@ test("parsed revert reason is shown, not a fake success", async ({ browser }) =>
   await expect(seller.getByTestId("toast-error").first()).toContainText(/DueInPast/);
   await expect(seller.getByTestId("toast-success")).toHaveCount(0);
   await expect(seller).toHaveURL(/#\/create/);
+});
+
+test("responsive at 375px and keyboard skip link, no wallet", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  for (const route of ["#/", "#/create", "#/invoice/1"]) {
+    await page.goto(route);
+    await page.waitForLoadState("networkidle");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, `horizontal overflow on ${route}`).toBeLessThanOrEqual(0);
+  }
+  await expect(page.getByTestId("receipt")).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".skip-link")).toBeFocused();
 });

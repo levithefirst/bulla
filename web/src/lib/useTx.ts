@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Hex } from "viem";
 import { explorerTx } from "../config";
-import { publicClient } from "../wagmi";
+import { client } from "./client";
+import { waitForReceipt } from "./rpc";
 import { useToasts } from "../components/Toasts";
 import { parseError } from "./errors";
 
@@ -17,7 +18,7 @@ export function useTx() {
       const hash = await send();
       const link = explorerTx(hash);
       toasts.update(id, { kind: "pending", title: `${label}: pending`, body: `tx ${hash.slice(0, 10)}…${hash.slice(-6)}`, link: link ? { href: link, label: "View on explorer" } : undefined });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+      const receipt = await waitForReceipt(client, hash);
       if (receipt.status !== "success") throw new Error(`${label} reverted on chain (tx ${hash}).`);
       toasts.update(id, { kind: "success", title: `${label}: confirmed`, body: `block ${receipt.blockNumber}`, link: link ? { href: link, label: "View on explorer" } : undefined });
       onDone?.();

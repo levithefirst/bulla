@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { erc20Abi, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { config } from "../config";
-import { publicClient } from "../wagmi";
+import { client } from "./client";
+import { ethCall, getLogs, latestTimestamp } from "./rpc";
 import { MOCK_INVOICES, MOCK_TOKEN } from "./mock";
 
 export const STATE_NAMES = ["None", "Draft", "Funded", "Submitted", "Released", "Refunded", "Cancelled"] as const;
@@ -48,9 +49,9 @@ export function useEscrowInfo() {
       if (config.mock) return { address: "0x000000000000000000000000000000000000b011", feeBps: 50, feeRecipient: "0x000000000000000000000000000000000000fee5", token: MOCK_TOKEN.address };
       const address = requireEscrow();
       const [feeBps, feeRecipient, token] = await Promise.all([
-        publicClient.readContract({ address, abi: bullaEscrowAbi, functionName: "feeBps" }),
-        publicClient.readContract({ address, abi: bullaEscrowAbi, functionName: "feeRecipient" }),
-        publicClient.readContract({ address, abi: bullaEscrowAbi, functionName: "token" }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeBps" }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeRecipient" }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "token" }),
       ]);
       return { address, feeBps: Number(feeBps), feeRecipient, token };
     },
@@ -66,8 +67,8 @@ export function useTokenInfo(token?: Address | null) {
     queryFn: async (): Promise<TokenInfo> => {
       if (config.mock) return MOCK_TOKEN;
       const [symbol, decimals] = await Promise.all([
-        publicClient.readContract({ address: token!, abi: erc20Abi, functionName: "symbol" }),
-        publicClient.readContract({ address: token!, abi: erc20Abi, functionName: "decimals" }),
+        ethCall(client, { address: token!, abi: erc20Abi, functionName: "symbol" }),
+        ethCall(client, { address: token!, abi: erc20Abi, functionName: "decimals" }),
       ]);
       return { address: token!, symbol, decimals };
     },
@@ -87,7 +88,7 @@ export function useInvoice(id: bigint | null) {
         return inv;
       }
       const address = requireEscrow();
-      return (await publicClient.readContract({ address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] })) as Invoice;
+      return (await ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] })) as Invoice;
     },
     refetchInterval: 10_000,
     retry: (count, err) => !(err instanceof NotConfiguredError) && !String(err).includes("InvoiceNotFound") && count < 1,
@@ -100,8 +101,7 @@ export function useChainNow() {
     queryKey: ["chainNow"],
     queryFn: async () => {
       if (config.mock) return BigInt(Math.floor(Date.now() / 1000));
-      const b = await publicClient.getBlock({ blockTag: "latest" });
-      return b.timestamp;
+      return latestTimestamp(client);
     },
     refetchInterval: 10_000,
   });
@@ -113,15 +113,8 @@ export function useInvoiceTxs(id: bigint | null) {
     queryKey: ["invoiceTxs", id?.toString()],
     enabled: id !== null && !config.mock && !!config.escrow,
     queryFn: async (): Promise<TxRef[]> => {
-      const logs = await publicClient.getContractEvents({
-        address: config.escrow!,
-        abi: bullaEscrowAbi,
-        fromBlock: config.deployBlock,
-        toBlock: "latest",
-      });
-      return logs
-        .filter((l) => (l.args as { id?: bigint }).id === id)
-        .map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber }));
+      const logs = await getLogs(client, config.escrow!, bullaEscrowAbi, config.deployBlock);
+      return logs.filter((l) => l.args.id === id).map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber }));
     },
     refetchInterval: 15_000,
     retry: 0,
@@ -145,8 +138,8 @@ export function useAllowanceAndBalance(owner?: Address, token?: Address) {
     enabled: !!owner && !!token && !config.mock && !!config.escrow,
     queryFn: async () => {
       const [allowance, balance] = await Promise.all([
-        publicClient.readContract({ address: token!, abi: erc20Abi, functionName: "allowance", args: [owner!, config.escrow!] }),
-        publicClient.readContract({ address: token!, abi: erc20Abi, functionName: "balanceOf", args: [owner!] }),
+        ethCall(client, { address: token!, abi: erc20Abi, functionName: "allowance", args: [owner!, config.escrow!] }),
+        ethCall(client, { address: token!, abi: erc20Abi, functionName: "balanceOf", args: [owner!] }),
       ]);
       return { allowance, balance };
     },

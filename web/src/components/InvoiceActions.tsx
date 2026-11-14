@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useAccount, useWriteContract } from "wagmi";
 import { erc20Abi, isHex, keccak256, toBytes, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { config } from "../config";
@@ -7,22 +6,22 @@ import { fmtAmount, fmtDuration } from "../lib/format";
 import { quoteFee, useAllowanceAndBalance, useInvalidateInvoice, type EscrowInfo, type Invoice, type TokenInfo } from "../lib/invoice";
 import { useTx } from "../lib/useTx";
 import { UnauditedWarning, CircuitHolderWarning } from "./Warnings";
-import { useWrongNetwork } from "./Wallet";
+import { useWallet } from "../lib/wallet";
+import { sendWrite } from "../lib/write";
 
 type Props = { inv: Invoice; token: TokenInfo; escrow: EscrowInfo; chainNow: bigint };
 
 const S = { Draft: 1, Funded: 2, Submitted: 3 } as const;
 
 function useWrite() {
-  const { writeContractAsync } = useWriteContract();
+  const w = useWallet();
   return (functionName: "fundInvoice" | "releaseFunds" | "claimRefund" | "mutualCancel", id: bigint) =>
-    writeContractAsync({ address: config.escrow!, abi: bullaEscrowAbi, functionName, args: [id], chainId: config.chain.id });
+    sendWrite(w, { address: config.escrow!, abi: bullaEscrowAbi, functionName, args: [id] });
 }
 
 export function FundInvoiceButton({ inv, token, chainNow }: Props) {
-  const { address } = useAccount();
-  const ab = useAllowanceAndBalance(address, token.address);
-  const { writeContractAsync } = useWriteContract();
+  const w = useWallet();
+  const ab = useAllowanceAndBalance(w.address, token.address);
   const write = useWrite();
   const invalidate = useInvalidateInvoice();
   const { run, busy } = useTx();
@@ -54,7 +53,7 @@ export function FundInvoiceButton({ inv, token, chainNow }: Props) {
           data-testid="approve-btn"
           disabled={busy || !needsApprove || pastDue || short}
           onClick={() =>
-            run(`Approve ${amt}`, () => writeContractAsync({ address: token.address, abi: erc20Abi, functionName: "approve", args: [config.escrow!, inv.totalAmount], chainId: config.chain.id }), () => invalidate(inv.id))
+            run(`Approve ${amt}`, () => sendWrite(w, { address: token.address, abi: erc20Abi, functionName: "approve", args: [config.escrow!, inv.totalAmount] }), () => invalidate(inv.id))
           }
         >
           1 · {needsApprove ? `Approve ${amt}` : "Approved ✓"}
@@ -71,7 +70,7 @@ export function SubmitDeliveryModal({ inv, chainNow }: Props) {
   const [open, setOpen] = useState(false);
   const [hashInput, setHashInput] = useState("");
   const [uri, setUri] = useState("");
-  const { writeContractAsync } = useWriteContract();
+  const w = useWallet();
   const invalidate = useInvalidateInvoice();
   const { run, busy } = useTx();
   const pastDue = chainNow >= inv.dueTimestamp;
@@ -90,18 +89,18 @@ export function SubmitDeliveryModal({ inv, chainNow }: Props) {
       </button>
       {open && (
         <div className="modal-backdrop" onClick={() => !busy && setOpen(false)}>
-          <div className="modal card" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={(e) => e.stopPropagation()}>
+          <div className="modal card" role="dialog" aria-modal="true" aria-labelledby="submit-title" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === "Escape" && !busy && setOpen(false)}>
             <h3 id="submit-title">Submit delivery for invoice #{inv.id.toString()}</h3>
             <label>
               Delivery hash
-              <input className="mono" data-testid="delivery-hash" placeholder="0x… bytes32 (e.g. sha256/keccak of the file) or any text to hash" value={hashInput} onChange={(e) => setHashInput(e.target.value)} />
+              <input autoFocus className="mono" data-testid="delivery-hash" placeholder="0x… bytes32 (e.g. sha256/keccak of the file) or any text to hash" value={hashInput} onChange={(e) => setHashInput(e.target.value)} />
               {hash && hash !== input && <small className="muted mono">keccak256(text) = {hash}</small>}
             </label>
             <label>
               Artifact URI (optional)
               <input data-testid="delivery-uri" placeholder="ipfs://… or https://… or tape://…" value={uri} onChange={(e) => setUri(e.target.value)} />
             </label>
-            <div className="row">
+            <div className="row row-end">
               <button className="btn btn-ghost" onClick={() => setOpen(false)} disabled={busy}>
                 Cancel
               </button>
@@ -112,7 +111,7 @@ export function SubmitDeliveryModal({ inv, chainNow }: Props) {
                 onClick={async () => {
                   const ok = await run(
                     "Submit delivery",
-                    () => writeContractAsync({ address: config.escrow!, abi: bullaEscrowAbi, functionName: "submitDelivery", args: [inv.id, hash!, uri.trim()], chainId: config.chain.id }),
+                    () => sendWrite(w, { address: config.escrow!, abi: bullaEscrowAbi, functionName: "submitDelivery", args: [inv.id, hash!, uri.trim()] }),
                     () => invalidate(inv.id),
                   );
                   if (ok) setOpen(false);
@@ -224,8 +223,7 @@ export function MutualCancelButton({ inv, token, me }: Props & { me: "seller" | 
 }
 
 export function InvoiceActions(props: Props) {
-  const { address, isConnected } = useAccount();
-  const wrong = useWrongNetwork();
+  const { address, isConnected, wrongNetwork: wrong } = useWallet();
   const { inv, chainNow } = props;
   const eq = (a?: Address) => !!address && !!a && a.toLowerCase() === address.toLowerCase();
   const me = eq(inv.seller) ? "seller" : eq(inv.buyer) ? "buyer" : null;

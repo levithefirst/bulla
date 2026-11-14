@@ -1,4 +1,5 @@
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from "viem";
+import { BaseError } from "viem";
+import { ContractRevert } from "./rpc";
 
 const FRIENDLY: Record<string, string> = {
   UnsupportedToken: "This escrow only accepts its configured token.",
@@ -22,17 +23,14 @@ const FRIENDLY: Record<string, string> = {
 };
 
 export function parseError(e: unknown): string {
-  if (e instanceof BaseError) {
-    if (e.walk((x) => x instanceof UserRejectedRequestError)) return "You rejected the request in your wallet.";
-    const revert = e.walk((x) => x instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null;
-    if (revert) {
-      const name = revert.data?.errorName ?? "";
-      if (name && FRIENDLY[name]) return `${FRIENDLY[name]} (${name})`;
-      if (name) return `Reverted: ${name}`;
-      if (revert.reason) return `Reverted: ${revert.reason}`;
-    }
-    return e.shortMessage || e.message;
+  if (e instanceof ContractRevert) {
+    const name = e.errorName;
+    return FRIENDLY[name] ? `${FRIENDLY[name]} (${name})` : `Reverted: ${name}`;
   }
+  const code = (e as { code?: number })?.code;
+  if (code === 4001) return "You rejected the request in your wallet.";
+  if (code === 4100) return "The wallet has not authorized this site. Connect again.";
+  if (e instanceof BaseError) return e.shortMessage || e.message;
   if (e instanceof Error) return e.message;
   return String(e);
 }
