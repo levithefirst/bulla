@@ -183,7 +183,7 @@ export function InvoicePage({ idParam }: { idParam: string }) {
             </tr>
             <tr>
               <th>Escrow contract</th>
-              <td>{escrow.data ? <AddrLink a={escrow.data.address} /> : config.escrow ? <AddrLink a={config.escrow} /> : "—"}</td>
+              <td>{escrow.data ? <AddrLink a={escrow.data.address} /> : config.escrow ? <AddrLink a={config.escrow} /> : "-"}</td>
             </tr>
             {(i.sellerCancelConsent || i.buyerCancelConsent) && (
               <tr>

@@ -109,7 +109,7 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
         Amount ({symbol})
         <input name="amount" inputMode="decimal" placeholder="250.00" value={amount} onChange={(e) => setAmount(e.target.value)} required />
         <small className="muted">
-          Token: <span className="mono">{escrow.data?.token ?? config.token ?? "—"}</span> (set by the escrow contract)
+          Token: <span className="mono">{escrow.data?.token ?? config.token ?? "-"}</span> (set by the escrow contract)
         </small>
       </label>
       <label>

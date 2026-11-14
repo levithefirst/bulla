@@ -23,3 +23,5 @@ deweb-out/
 *.pem
 *.key
 keystore/
+e2e/.runtime.json
+web/dist-e2e/

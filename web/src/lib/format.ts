@@ -1,6 +1,6 @@
 import { formatUnits, isAddress, isHex, pad, getAddress, type Hex } from "viem";
 
-export const shortAddr = (a?: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "—");
+export const shortAddr = (a?: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "-");
 
 export function fmtAmount(v: bigint, decimals: number, symbol?: string) {
   const s = formatUnits(v, decimals);
@@ -12,7 +12,7 @@ export function fmtAmount(v: bigint, decimals: number, symbol?: string) {
 
 export function fmtTime(ts: bigint | number) {
   const n = Number(ts);
-  if (!n) return "—";
+  if (!n) return "-";
   return new Date(n * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
