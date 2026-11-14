@@ -52,7 +52,17 @@ const problems: string[] = [];
 const warnings: string[] = [];
 
 console.log(`[deweb] building web for ${network} (mock off)`);
-const b = spawnSync("npx", ["vite", "build", "--emptyOutDir"], { cwd: web, stdio: "inherit", env: { ...process.env, VITE_BULLA_NETWORK: network, VITE_MOCK: "0" } });
+if (network !== "xlayerMainnet" && network !== "xlayerTestnet") {
+  console.error(`[deweb] DEWEB_NETWORK must be xlayerMainnet or xlayerTestnet, got ${network}`);
+  process.exit(1);
+}
+// The DeWEB (mainnet) package never carries the testnet demo gas-tank key.
+const tankKey = process.env.VITE_DEMO_GAS_TANK_KEY;
+const b = spawnSync("npx", ["vite", "build", "--emptyOutDir"], {
+  cwd: web,
+  stdio: "inherit",
+  env: { ...process.env, VITE_BULLA_NETWORK: network, VITE_MOCK: "0", VITE_DEMO_GAS_TANK_KEY: network === "xlayerMainnet" ? "" : (tankKey ?? "") },
+});
 if (b.status !== 0) process.exit(b.status ?? 1);
 
 fs.rmSync(out, { recursive: true, force: true });
@@ -64,6 +74,13 @@ const escrow = deployments.networks?.[network]?.escrow ?? null;
 if (!escrow && !process.env.VITE_ESCROW_ADDRESS) warnings.push(`No BullaEscrow address for ${network} in contracts/deployments.json: the published app will show "not deployed". Deploy first, then re-run.`);
 
 const files = walk(site).sort();
+if (network === "xlayerMainnet") {
+  for (const f of files) {
+    const text = fs.readFileSync(path.join(site, f), "latin1");
+    if (tankKey && text.includes(tankKey.replace(/^0x/, ""))) problems.push(`${f}: contains the demo gas-tank key`);
+    if (/Judge mode runs only|demo gas tank/i.test(text)) problems.push(`${f}: judge-mode code found in a mainnet build`);
+  }
+}
 const manifest = files.map((p) => {
   const buf = fs.readFileSync(path.join(site, p));
   const ext = path.extname(p).toLowerCase();

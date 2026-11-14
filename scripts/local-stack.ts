@@ -12,8 +12,17 @@ import { privateKeyToAccount } from "viem/accounts";
 import { hardhat } from "viem/chains";
 
 export const root = path.resolve(__dirname, "..");
-export type Keys = Record<"deployer" | "seller" | "buyer" | "feeRecipient", { address: Address; privateKey: Hex }>;
-export type Stack = { rpc: string; baseURL: string; escrow: Address; token: Address; deployBlock: number; keys: Keys; stop: () => void };
+export type Keys = Record<"deployer" | "seller" | "buyer" | "feeRecipient" | "gasTank", { address: Address; privateKey: Hex }>;
+export type Stack = {
+  rpc: string;
+  baseURL: string;
+  escrow: Address;
+  token: Address;
+  deployBlock: number;
+  judge: { escrow: Address; token: Address; deployBlock: number };
+  keys: Keys;
+  stop: () => void;
+};
 
 export function sh(cmd: string, args: string[], env: Record<string, string> = {}, cwd = root) {
   const r = spawnSync(cmd, args, { cwd, stdio: "inherit", env: { ...process.env, ...env } });
@@ -73,7 +82,7 @@ export async function startLocalStack(opts: { rpcPort: number; webPort: number; 
     await waitFor(RPC, JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }));
 
     const pub = createPublicClient({ chain: hardhat, transport: http(RPC) });
-    for (const r of ["deployer", "seller", "buyer", "feeRecipient"] as const) {
+    for (const r of ["deployer", "seller", "buyer", "feeRecipient", "gasTank"] as const) {
       await pub.request({ method: "hardhat_setBalance" as never, params: [keys[r].address, "0x56BC75E2D63100000"] as never }); // 100 ETH
     }
     const deployer = createWalletClient({ chain: hardhat, transport: http(RPC), account: privateKeyToAccount(keys.deployer.privateKey) });
@@ -87,16 +96,37 @@ export async function startLocalStack(opts: { rpcPort: number; webPort: number; 
     await pub.waitForTransactionReceipt({ hash: await deployer.writeContract({ address: token, abi: tokenArt.abi, functionName: "mint", args: [keys.buyer.address, parseUnits("100000", 6)] }) });
     console.log(`[${opts.tag}] token ${token}\n[${opts.tag}] escrow ${escrow}`);
 
+    // Judge mode: DemoUSD + an escrow bound to it (local stand-in for the testnet judge deployment).
+    const demoArt = artifact("DemoUSD.sol/DemoUSD.json");
+    const demo = (await pub.waitForTransactionReceipt({ hash: await deployer.deployContract({ abi: demoArt.abi, bytecode: demoArt.bytecode, args: [] }) })).contractAddress!;
+    const jRcpt = await pub.waitForTransactionReceipt({
+      hash: await deployer.deployContract({ abi: escrowArt.abi, bytecode: escrowArt.bytecode, args: [demo, keys.feeRecipient.address, 50, keys.deployer.address] }),
+    });
+    const judge = { escrow: jRcpt.contractAddress!, token: demo, deployBlock: Number(jRcpt.blockNumber) };
+    console.log(`[${opts.tag}] judge DemoUSD ${demo}\n[${opts.tag}] judge escrow ${judge.escrow}`);
+
     sh(
       "npx",
       ["vite", "build", "--outDir", opts.outDir, "--emptyOutDir"],
-      { VITE_BULLA_NETWORK: "localhost", VITE_ESCROW_ADDRESS: escrow, VITE_ESCROW_TOKEN: token, VITE_RPC_URL: RPC, VITE_DEPLOY_BLOCK: String(escrowRcpt.blockNumber), VITE_MOCK: "0" },
+      {
+        VITE_BULLA_NETWORK: "localhost",
+        VITE_ESCROW_ADDRESS: escrow,
+        VITE_ESCROW_TOKEN: token,
+        VITE_RPC_URL: RPC,
+        VITE_DEPLOY_BLOCK: String(escrowRcpt.blockNumber),
+        VITE_JUDGE_ESCROW_ADDRESS: judge.escrow,
+        VITE_JUDGE_TOKEN: judge.token,
+        VITE_JUDGE_DEPLOY_BLOCK: String(judge.deployBlock),
+        // Throwaway LOCAL gas tank (from gitignored e2e/.keys.json), passed only via env, never written to a file in git.
+        VITE_DEMO_GAS_TANK_KEY: keys.gasTank.privateKey,
+        VITE_MOCK: "0",
+      },
       path.join(root, "web"),
     );
     procs.push(spawn("npx", ["vite", "preview", "--outDir", opts.outDir, "--port", String(opts.webPort), "--strictPort"], { cwd: path.join(root, "web"), stdio: ["ignore", "ignore", "inherit"], detached: true }));
     const baseURL = `http://127.0.0.1:${opts.webPort}/`;
     await waitFor(baseURL);
-    return { rpc: RPC, baseURL, escrow, token, deployBlock: Number(escrowRcpt.blockNumber), keys, stop };
+    return { rpc: RPC, baseURL, escrow, token, deployBlock: Number(escrowRcpt.blockNumber), judge, keys, stop };
   } catch (e) {
     stop();
     throw e;

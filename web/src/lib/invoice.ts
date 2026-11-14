@@ -5,6 +5,7 @@ import { config } from "../config";
 import { client } from "./client";
 import { ethCall, getLogs, latestTimestamp } from "../../../shared/rpc";
 import { MOCK_INVOICES, MOCK_TOKEN } from "./mock";
+import { useEscrowTarget, type EscrowTarget } from "./escrowTarget";
 
 export const STATE_NAMES = ["None", "Draft", "Funded", "Submitted", "Released", "Refunded", "Cancelled"] as const;
 export type StateName = (typeof STATE_NAMES)[number];
@@ -37,17 +38,18 @@ export const stateName = (s: number): StateName => STATE_NAMES[s] ?? "None";
 
 export class NotConfiguredError extends Error {}
 
-export function requireEscrow(): Address {
-  if (!config.escrow) throw new NotConfiguredError(`BullaEscrow is not deployed on ${config.chain.name} yet (no address in contracts/deployments.json).`);
-  return config.escrow;
+export function requireEscrow(t: EscrowTarget): Address {
+  if (!t.address) throw new NotConfiguredError(`BullaEscrow is not deployed on ${config.chain.name} yet (no address in contracts/deployments.json).`);
+  return t.address;
 }
 
 export function useEscrowInfo() {
+  const t = useEscrowTarget();
   return useQuery({
-    queryKey: ["escrow", config.escrow],
+    queryKey: ["escrow", t.address],
     queryFn: async (): Promise<EscrowInfo> => {
       if (config.mock) return { address: "0x000000000000000000000000000000000000b011", feeBps: 50, feeRecipient: "0x000000000000000000000000000000000000fee5", token: MOCK_TOKEN.address };
-      const address = requireEscrow();
+      const address = requireEscrow(t);
       const [feeBps, feeRecipient, token] = await Promise.all([
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeBps" }),
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeRecipient" }),
@@ -78,8 +80,9 @@ export function useTokenInfo(token?: Address | null) {
 }
 
 export function useInvoice(id: bigint | null) {
+  const t = useEscrowTarget();
   return useQuery({
-    queryKey: ["invoice", id?.toString()],
+    queryKey: ["invoice", t.address, id?.toString()],
     enabled: id !== null,
     queryFn: async (): Promise<Invoice> => {
       if (config.mock) {
@@ -87,7 +90,7 @@ export function useInvoice(id: bigint | null) {
         if (!inv) throw new Error(`Invoice #${id} not found (mock data has ids 1-${MOCK_INVOICES.length}).`);
         return inv;
       }
-      const address = requireEscrow();
+      const address = requireEscrow(t);
       return (await ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] })) as Invoice;
     },
     refetchInterval: 10_000,
@@ -109,11 +112,12 @@ export function useChainNow() {
 
 /** Best-effort transaction hashes for the timeline. Failure (e.g. RPC log range limits) is not fatal. */
 export function useInvoiceTxs(id: bigint | null) {
+  const t = useEscrowTarget();
   return useQuery({
-    queryKey: ["invoiceTxs", id?.toString()],
-    enabled: id !== null && !config.mock && !!config.escrow,
+    queryKey: ["invoiceTxs", t.address, id?.toString()],
+    enabled: id !== null && !config.mock && !!t.address,
     queryFn: async (): Promise<TxRef[]> => {
-      const logs = await getLogs(client, config.escrow!, bullaEscrowAbi, config.deployBlock);
+      const logs = await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
       return logs.filter((l) => l.args.id === id).map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber }));
     },
     refetchInterval: 15_000,
@@ -123,9 +127,10 @@ export function useInvoiceTxs(id: bigint | null) {
 
 export function useInvalidateInvoice() {
   const qc = useQueryClient();
-  return (id?: bigint) => {
-    qc.invalidateQueries({ queryKey: ["invoice", id?.toString()] });
-    qc.invalidateQueries({ queryKey: ["invoiceTxs", id?.toString()] });
+  // Prefix invalidation: covers both escrow targets.
+  return (_id?: bigint) => {
+    qc.invalidateQueries({ queryKey: ["invoice"] });
+    qc.invalidateQueries({ queryKey: ["invoiceTxs"] });
     qc.invalidateQueries({ queryKey: ["allowance"] });
     qc.invalidateQueries({ queryKey: ["balance"] });
     qc.invalidateQueries({ queryKey: ["chainNow"] });
@@ -133,12 +138,13 @@ export function useInvalidateInvoice() {
 }
 
 export function useAllowanceAndBalance(owner?: Address, token?: Address) {
+  const t = useEscrowTarget();
   return useQuery({
-    queryKey: ["allowance", owner, token],
-    enabled: !!owner && !!token && !config.mock && !!config.escrow,
+    queryKey: ["allowance", t.address, owner, token],
+    enabled: !!owner && !!token && !config.mock && !!t.address,
     queryFn: async () => {
       const [allowance, balance] = await Promise.all([
-        ethCall(client, { address: token!, abi: erc20Abi, functionName: "allowance", args: [owner!, config.escrow!] }),
+        ethCall(client, { address: token!, abi: erc20Abi, functionName: "allowance", args: [owner!, t.address!] }),
         ethCall(client, { address: token!, abi: erc20Abi, functionName: "balanceOf", args: [owner!] }),
       ]);
       return { allowance, balance };

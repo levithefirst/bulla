@@ -15,10 +15,13 @@ export type Eip1193 = {
 
 export type ConnectorId = "okxWallet" | "injected";
 type W = Window & { okxwallet?: Eip1193; ethereum?: Eip1193 };
-export const CONNECTORS: { id: ConnectorId; name: string; get: () => Eip1193 | undefined }[] = [
-  { id: "okxWallet", name: "OKX Wallet", get: () => (window as W).okxwallet },
-  { id: "injected", name: "Browser wallet", get: () => (window as W).ethereum },
+// OKX Wallet is the first-class option on X Layer: listed first and marked recommended.
+export const CONNECTORS: { id: ConnectorId; name: string; hint?: string; get: () => Eip1193 | undefined }[] = [
+  { id: "okxWallet", name: "OKX Wallet", hint: "Recommended on X Layer", get: () => (window as W).okxwallet },
+  { id: "injected", name: "Browser wallet", hint: "MetaMask, Rabby, …", get: () => (window as W).ethereum },
 ];
+/** Official OKX Wallet site (docs/research.md §7). */
+export const OKX_WALLET_URL = "https://web3.okx.com/";
 
 const KEY = "bulla.wallet";
 const store = {

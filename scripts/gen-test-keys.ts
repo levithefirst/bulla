@@ -8,13 +8,19 @@ import * as path from "path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 const out = path.resolve(__dirname, "../e2e/.keys.json");
-if (fs.existsSync(out) && !process.argv.includes("--force")) {
+// gasTank: the LOCAL judge-mode gas tank used by CI. Never a real-network key.
+const roles = ["deployer", "seller", "buyer", "feeRecipient", "gasTank"] as const;
+const existing = fs.existsSync(out) && !process.argv.includes("--force") ? JSON.parse(fs.readFileSync(out, "utf8")) : {};
+if (roles.every((r) => existing[r])) {
   console.log(`exists: ${out} (use --force to regenerate)`);
   process.exit(0);
 }
-const roles = ["deployer", "seller", "buyer", "feeRecipient"] as const;
 const keys: Record<string, { address: string; privateKey: string }> = {};
 for (const r of roles) {
+  if (existing[r]) {
+    keys[r] = existing[r];
+    continue;
+  }
   const privateKey = generatePrivateKey();
   keys[r] = { address: privateKeyToAccount(privateKey).address, privateKey };
 }

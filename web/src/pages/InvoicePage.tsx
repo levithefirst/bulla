@@ -14,6 +14,7 @@ import { CopyButton } from "../components/Copy";
 import { Qr } from "../components/Qr";
 import { EmptyState } from "../components/Empty";
 import { ReceiptSkeleton } from "../components/Skeleton";
+import { EscrowTargetProvider, JUDGE_TARGET, REAL_TARGET, useEscrowTarget } from "../lib/escrowTarget";
 
 function ExtLink({ href, children, label }: { href: string | null; children: ReactNode; label?: string }) {
   return href ? (
@@ -113,6 +114,7 @@ function OpenAnother() {
 }
 
 function Receipt({ idParam }: { idParam: string }) {
+  const target = useEscrowTarget();
   const id = /^\d+$/.test(idParam) && idParam !== "0" ? BigInt(idParam) : null;
   const inv = useInvoice(id);
   const escrow = useEscrowInfo();
@@ -180,7 +182,7 @@ function Receipt({ idParam }: { idParam: string }) {
   const chainNow = now.data ?? BigInt(Math.floor(Date.now() / 1000));
   const duePassed = chainNow >= i.dueTimestamp;
   const link = window.location.href;
-  const escrowAddr = escrow.data?.address ?? config.escrow;
+  const escrowAddr = escrow.data?.address ?? target.address;
 
   return (
     <div className="receipt-layout">
@@ -189,6 +191,7 @@ function Receipt({ idParam }: { idParam: string }) {
           <div>
             <p className="eyebrow-plain">
               Bulla receipt · {config.chain.name}
+              {target.kind === "judge" && <span className="tag tag-demo">Demo escrow · DemoUSD, no value</span>}
             </p>
             <h1 id="receipt-title">
               Invoice <span className="num">#{i.id.toString()}</span>
@@ -364,10 +367,22 @@ function Receipt({ idParam }: { idParam: string }) {
   );
 }
 
-export default function InvoicePage({ idParam }: { idParam: string }) {
+export default function InvoicePage({ idParam, demo = false }: { idParam: string; demo?: boolean }) {
+  // `?escrow=demo` receipts belong to the testnet judge-mode escrow (DemoUSD). Never on mainnet builds.
+  const target = demo && JUDGE_TARGET ? JUDGE_TARGET : REAL_TARGET;
   return (
     <QueryProvider>
-      <Receipt idParam={idParam} />
+      <EscrowTargetProvider target={target}>
+        {demo && !JUDGE_TARGET ? (
+          <div className="narrow">
+            <EmptyState title="Demo receipts are testnet-only" testid="receipt-error">
+              <p className="muted">This link points at the judge-mode escrow on X Layer testnet, which this build does not include.</p>
+            </EmptyState>
+          </div>
+        ) : (
+          <Receipt idParam={idParam} />
+        )}
+      </EscrowTargetProvider>
     </QueryProvider>
   );
 }

@@ -385,3 +385,44 @@ legend { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-trans
   .receipt-foot { break-inside: avoid; }
   .timeline li { break-inside: avoid; }
 }
+
+/* ---------- Judge mode ---------- */
+.advanced-link { margin: 16px 0 0; font-size: 0.9rem; }
+.tag-demo { display: inline-block; margin-left: 8px; color: var(--pending-text); background: var(--pending-bg); }
+.judge-head { max-width: 760px; margin-bottom: 24px; }
+.judge-head h1 { font-size: clamp(1.8rem, 1.3rem + 2vw, 2.6rem); letter-spacing: -0.035em; }
+.judge-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
+.judge-timer { font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+.judge-timer-done { color: var(--released-text); background: var(--released-bg); padding: 2px 10px; border-radius: 999px; }
+.judge-steps { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; }
+.jstep { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.jstep:last-child { border-bottom: 0; }
+.jstep-icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; border: 2px solid var(--border); color: var(--text-secondary); background: var(--surface); }
+.jstep-running .jstep-icon { border-color: var(--pending-solid); }
+.jstep-done .jstep-icon { background: var(--released-solid); border-color: var(--released-solid); color: var(--on-status); }
+.jstep-skipped .jstep-icon { background: var(--text-secondary); border-color: var(--text-secondary); color: var(--surface); }
+.jstep-error .jstep-icon { background: var(--disputed-solid); border-color: var(--disputed-solid); color: var(--on-status); }
+.jstep-body { display: grid; gap: 4px; min-width: 0; }
+.jstep-label { font-weight: 600; }
+.jstep-idle .jstep-label { color: var(--text-secondary); font-weight: 500; }
+.jstep-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 0.85rem; }
+.role-chip { font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.role-freelancer { color: var(--funded-text); background: var(--funded-bg); }
+.role-client { color: var(--released-text); background: var(--released-bg); }
+.role-tank { color: var(--text-secondary); background: var(--bg); border-color: var(--border); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--pending-solid); border-right-color: transparent; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.judge-invoice .amount-big { margin: 12px 0; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.seg-btn { appearance: none; border: 0; background: var(--bg); color: var(--text); font: inherit; font-weight: 600; font-size: 0.875rem; padding: 7px 14px; cursor: pointer; min-height: 36px; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-on { background: var(--accent); color: var(--on-accent); }
+.burner .tag-demo { margin-left: 0; }
+.wallet-option-name { display: grid; gap: 2px; }
+.wallet-rec { font-size: 0.75rem; font-weight: 600; color: var(--released-text); background: var(--released-bg); padding: 0 6px; border-radius: 4px; justify-self: start; }
+.wallet-get { display: block; padding: 8px 12px; font-size: 0.85rem; font-weight: 600; }
+@media (max-width: 1023px) { .judge-grid { grid-template-columns: minmax(0, 1fr); } }
+.state-history { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 0; margin: 0 0 8px; align-items: center; }
+.state-history li { display: flex; align-items: center; gap: 6px; }
+.state-history li + li::before { content: "→"; color: var(--text-secondary); }

@@ -37,6 +37,9 @@ if (!NETWORK_KEYS.includes(networkKey)) throw new Error(`Unknown VITE_BULLA_NETW
 const dep = resolveDeployment(deployments as DeploymentsFile, networkKey, {
   escrow: import.meta.env.VITE_ESCROW_ADDRESS,
   token: import.meta.env.VITE_ESCROW_TOKEN,
+  judgeEscrow: import.meta.env.VITE_JUDGE_ESCROW_ADDRESS,
+  judgeToken: import.meta.env.VITE_JUDGE_TOKEN,
+  judgeDeployBlock: import.meta.env.VITE_JUDGE_DEPLOY_BLOCK,
 });
 
 const chain = CHAINS[networkKey];
@@ -52,6 +55,13 @@ export const config = {
   feeBpsHint: dep.feeBps,
   deployBlock: import.meta.env.VITE_DEPLOY_BLOCK ? BigInt(import.meta.env.VITE_DEPLOY_BLOCK) : dep.deployBlock,
   mock: import.meta.env.VITE_MOCK === "1",
+  /**
+   * Judge mode: one-tap testnet demo with browser burner keys. Compiled in only for
+   * xlayerTestnet (1952) and the local CI node; mainnet builds drop it entirely (__JUDGE_BUILD__).
+   */
+  judge: __JUDGE_BUILD__ ? dep.judge : null,
+  /** Mainnet/DeWEB builds can link out to the hosted testnet judge build. */
+  judgeUrl: import.meta.env.VITE_JUDGE_URL || null,
   deweb: dewebJson,
 };
 

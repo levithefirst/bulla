@@ -8,6 +8,7 @@ import { useTx } from "../lib/useTx";
 import { UnauditedWarning, CircuitHolderWarning } from "./Warnings";
 import { useWallet } from "../lib/wallet";
 import { sendWrite } from "../lib/write";
+import { useEscrowTarget } from "../lib/escrowTarget";
 
 type Props = { inv: Invoice; token: TokenInfo; escrow: EscrowInfo; chainNow: bigint };
 
@@ -15,12 +16,14 @@ const S = { Draft: 1, Funded: 2, Submitted: 3 } as const;
 
 function useWrite() {
   const w = useWallet();
+  const t = useEscrowTarget();
   return (functionName: "fundInvoice" | "releaseFunds" | "claimRefund" | "mutualCancel", id: bigint) =>
-    sendWrite(w, { address: config.escrow!, abi: bullaEscrowAbi, functionName, args: [id] });
+    sendWrite(w, { address: t.address!, abi: bullaEscrowAbi, functionName, args: [id] });
 }
 
 export function FundInvoiceButton({ inv, token, chainNow }: Props) {
   const w = useWallet();
+  const target = useEscrowTarget();
   const ab = useAllowanceAndBalance(w.address, token.address);
   const write = useWrite();
   const invalidate = useInvalidateInvoice();
@@ -53,7 +56,7 @@ export function FundInvoiceButton({ inv, token, chainNow }: Props) {
           data-testid="approve-btn"
           disabled={busy || !needsApprove || pastDue || short}
           onClick={() =>
-            run(`Approve ${amt}`, () => sendWrite(w, { address: token.address, abi: erc20Abi, functionName: "approve", args: [config.escrow!, inv.totalAmount] }), () => invalidate(inv.id))
+            run(`Approve ${amt}`, () => sendWrite(w, { address: token.address, abi: erc20Abi, functionName: "approve", args: [target.address!, inv.totalAmount] }), () => invalidate(inv.id))
           }
         >
           1 · {needsApprove ? `Approve ${amt}` : "Approved ✓"}
@@ -71,6 +74,7 @@ export function SubmitDeliveryModal({ inv, chainNow }: Props) {
   const [hashInput, setHashInput] = useState("");
   const [uri, setUri] = useState("");
   const w = useWallet();
+  const target = useEscrowTarget();
   const invalidate = useInvalidateInvoice();
   const { run, busy } = useTx();
   const pastDue = chainNow >= inv.dueTimestamp;
@@ -111,7 +115,7 @@ export function SubmitDeliveryModal({ inv, chainNow }: Props) {
                 onClick={async () => {
                   const ok = await run(
                     "Submit delivery",
-                    () => sendWrite(w, { address: config.escrow!, abi: bullaEscrowAbi, functionName: "submitDelivery", args: [inv.id, hash!, uri.trim()] }),
+                    () => sendWrite(w, { address: target.address!, abi: bullaEscrowAbi, functionName: "submitDelivery", args: [inv.id, hash!, uri.trim()] }),
                     () => invalidate(inv.id),
                   );
                   if (ok) setOpen(false);

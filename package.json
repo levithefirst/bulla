@@ -25,7 +25,9 @@
     "abi": "npm run compile && node scripts/export-abi.cjs",
     "check:contrast": "tsx scripts/check-contrast.ts",
     "release:check": "tsx scripts/release-check.ts",
-    "screenshots": "tsx scripts/screenshots.ts"
+    "screenshots": "tsx scripts/screenshots.ts",
+    "deploy:judge": "npm run deploy:judge -w contracts",
+    "e2e:testnet": "tsx scripts/run-e2e-testnet.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 
-const runtimePath = path.resolve(__dirname, ".runtime.json");
+const runtimePath = path.resolve(__dirname, process.env.E2E_RUNTIME_FILE ?? ".runtime.json");
 const runtime = fs.existsSync(runtimePath) ? JSON.parse(fs.readFileSync(runtimePath, "utf8")) : { baseURL: "http://127.0.0.1:4174/" };
 
 export default defineConfig({

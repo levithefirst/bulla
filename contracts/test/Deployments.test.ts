@@ -3,7 +3,7 @@ import { ethers } from "hardhat";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { readDeployments, writeDeployment } from "../scripts/deployments";
+import { readDeployments, writeDeployment, writeJudgeDeployment } from "../scripts/deployments";
 import { resolveDeployment } from "../../shared/deployments";
 
 // The deploy scripts and the web app share one schema (shared/deployments.ts). This checks that
@@ -55,5 +55,19 @@ describe("deployments.json wiring", () => {
       expect(e!.network, k).to.equal(k);
       expect(resolveDeployment(committed, e!.network).feeBps).to.equal(e!.feeBps);
     }
+  });
+
+  it("judge mode: testnet judge block round-trips and keeps the real-token entry; mainnet judge is refused", async () => {
+    const d = await deployed();
+    const file = tmp();
+    writeDeployment({ network: "xlayerTestnet", chainId: 1952, escrow: d.escrow, token: d.token, tokenSymbol: "USDC", tokenDecimals: 6, feeRecipient: d.fr, feeBps: 50, deployedAt: null, deployBlock: d.block }, file);
+    const judge = { escrow: d.token, token: d.escrow, deployBlock: d.block + 1, feeRecipient: d.fr, feeBps: 50, deployedAt: new Date().toISOString() };
+    writeJudgeDeployment("xlayerTestnet", judge, file);
+    const r = resolveDeployment(readDeployments(file), "xlayerTestnet");
+    expect(r.escrow, "real-token escrow untouched").to.equal(d.escrow);
+    expect(r.judge?.escrow).to.equal(d.token);
+    expect(r.judge?.deployBlock).to.equal(BigInt(d.block + 1));
+    expect(() => writeJudgeDeployment("xlayerMainnet", judge, file)).to.throw(/not allowed on xlayerMainnet/);
+    expect(resolveDeployment(readDeployments(file), "xlayerMainnet", { judgeEscrow: d.escrow, judgeToken: d.token }).judge, "mainnet never resolves a judge escrow").to.equal(null);
   });
 });

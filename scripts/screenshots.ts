@@ -66,6 +66,21 @@ async function main() {
         await page.close();
       }
     }
+    // Judge mode: one tap on the landing, captured once the loop reaches Released.
+    for (const scheme of ["light", "dark"] as const) {
+      for (const [name, w, h] of [["judge-mode", 1280, 1100], ["mobile-judge-mode", 375, 812]] as const) {
+        const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, colorScheme: scheme });
+        await page.goto(s.baseURL + "#/");
+        await page.getByTestId("cta-try").click();
+        await page.getByTestId("judge-state").filter({ hasText: "Released" }).waitFor({ timeout: 30_000 });
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(300);
+        const file = path.join(OUT, `${name}-${scheme}.png`);
+        await page.screenshot({ path: file });
+        console.log(`[shots] ${path.relative(root, file)}`);
+        await page.close();
+      }
+    }
     await browser.close();
   } finally {
     s.stop();

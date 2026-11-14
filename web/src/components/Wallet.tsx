@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { config } from "../config";
 import { shortAddr } from "../lib/format";
 import { parseError } from "../lib/errors";
-import { CONNECTORS, useWallet } from "../lib/wallet";
+import { CONNECTORS, OKX_WALLET_URL, useWallet } from "../lib/wallet";
 import { useToasts } from "./Toasts";
 
 export function useWrongNetwork() {
@@ -64,10 +64,18 @@ export function ConnectButton() {
                 }
               }}
             >
-              <span>{c.name}</span>
+              <span className="wallet-option-name">
+                <span>{c.name}</span>
+                {c.hint && <span className={c.id === "okxWallet" ? "wallet-rec" : "muted small"}>{c.hint}</span>}
+              </span>
               {!c.get() && <span className="muted small">not detected</span>}
             </button>
           ))}
+          {!CONNECTORS[0].get() && (
+            <a className="wallet-get" href={OKX_WALLET_URL} target="_blank" rel="noreferrer">
+              Get OKX Wallet
+            </a>
+          )}
         </div>
       )}
     </div>

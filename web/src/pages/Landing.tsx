@@ -93,11 +93,26 @@ export function Landing() {
             needed.
           </p>
           <div className="cta-row">
-            <a className="btn btn-primary btn-lg" href="#/create" data-testid="cta-create">
+            {config.judge ? (
+              <a className="btn btn-primary btn-lg" href="#/try?run=1" data-testid="cta-try">
+                Try it now: one-tap escrow
+              </a>
+            ) : config.judgeUrl ? (
+              <a className="btn btn-primary btn-lg" href={config.judgeUrl} data-testid="cta-try">
+                Try it now on X Layer testnet
+              </a>
+            ) : null}
+            <a className={`btn btn-lg${config.judge || config.judgeUrl ? "" : " btn-primary"}`} href="#/create" data-testid="cta-create">
               Create an invoice
             </a>
             <OpenReceipt />
           </div>
+          <p className="advanced-link">
+            <a href="#/create" data-testid="cta-advanced">
+              Advanced: use my own wallet
+            </a>{" "}
+            <span className="muted">OKX Wallet (recommended on X Layer) or any browser wallet, with real USDC.</span>
+          </p>
           <ul className="facts-inline" aria-label="Key facts">
             <li>0.5% fee, only on release</li>
             <li>Full refund after the due date</li>
