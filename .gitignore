@@ -25,3 +25,4 @@ deweb-out/
 keystore/
 e2e/.runtime.json
 web/dist-e2e/
+web/dist-shots/

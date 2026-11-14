@@ -203,6 +203,11 @@ test("responsive at 375px and keyboard skip link, no wallet", async ({ browser }
     expect(overflow, `horizontal overflow on ${route}`).toBeLessThanOrEqual(0);
   }
   await expect(page.getByTestId("receipt")).toBeVisible();
+  // In-app navigation moves focus to <main> for keyboard and screen-reader users.
+  await expect(page.locator("#main")).toBeFocused();
+  // On a fresh page load the first Tab lands on the skip link.
+  await page.reload();
+  await page.getByTestId("receipt").waitFor();
   await page.keyboard.press("Tab");
   await expect(page.locator(".skip-link")).toBeFocused();
 });

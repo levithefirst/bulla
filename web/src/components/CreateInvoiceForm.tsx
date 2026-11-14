@@ -5,7 +5,7 @@ import { config } from "../config";
 import { fmtAmount, fmtDuration, parseContainerId, ZERO32 } from "../lib/format";
 import { quoteFee, useEscrowInfo, useTokenInfo, useChainNow } from "../lib/invoice";
 import { client } from "../lib/client";
-import { waitForReceipt } from "../lib/rpc";
+import { waitForReceipt } from "../../../shared/rpc";
 import { useWallet } from "../lib/wallet";
 import { sendWrite } from "../lib/write";
 import { parseError } from "../lib/errors";

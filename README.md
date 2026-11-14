@@ -16,14 +16,26 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 
 | Piece | State |
 | --- | --- |
-| `BullaEscrow` contract + 30 tests | done, passing locally |
-| Web app (landing, create, no-wallet receipt, all actions) | done, builds to a static relative-path tree |
-| E2E (happy path, timeout refund, mutual cancel, revert toast) | done, passing on a local Hardhat node |
+| `BullaEscrow` contract | done; 47 Hardhat tests incl. seeded fuzz + invariant walks; Slither 0 high / 0 medium |
+| Web app (landing, create, no-wallet receipt with QR, all actions) | done; static relative-path build, light and dark, 375px to desktop |
+| E2E (happy path, timeout refund, mutual cancel, revert toast, 375px + keyboard) | 6 passing on a local Hardhat node |
 | X Layer testnet / mainnet deploy | scripts ready, **not deployed** (needs a human key) |
 | TapeOut circuit + container | **not minted** (human, official UI) |
-| DeWEB publish | package ready, **not published** |
+| DeWEB publish | package ready (~465 KB, 12 files), **not published** |
 
-Everything still open is listed in [`docs/HANDOFF.md`](docs/HANDOFF.md).
+Everything still open is listed in [`docs/HANDOFF.md`](docs/HANDOFF.md). `npm run release:check` fails until it is done.
+
+## Screenshots
+
+Generated from a real local chain with `npm run screenshots` (light and dark, desktop and 375px):
+
+| Light | Dark |
+| --- | --- |
+| ![Landing, light](docs/screenshots/landing-light.png) | ![Landing, dark](docs/screenshots/landing-dark.png) |
+| ![Receipt, light](docs/screenshots/receipt-submitted-light.png) | ![Receipt, dark](docs/screenshots/receipt-submitted-dark.png) |
+| ![Create, light](docs/screenshots/create-light.png) | ![Create, dark](docs/screenshots/create-dark.png) |
+
+Mobile: [landing](docs/screenshots/mobile-landing-light.png), [receipt](docs/screenshots/mobile-receipt-light.png), [receipt dark](docs/screenshots/mobile-receipt-dark.png). Released receipt: [light](docs/screenshots/receipt-released-light.png), [dark](docs/screenshots/receipt-released-dark.png).
 
 ## Architecture
 
@@ -47,7 +59,8 @@ No backend. No TapeSend. No bridges. The contract never calls TapeOut; the conta
 ```
 contracts/   Hardhat project: BullaEscrow.sol, MockERC20, tests, deploy scripts, deployments.json
 web/         Vite + React + TypeScript + wagmi/viem static app
-scripts/     probe-network, probe-tapeout, deweb-package, e2e runner, test-key generator, ABI export
+scripts/     probes, deweb-package, e2e runner + local stack, screenshots, release:check, check:contrast, ABI export
+shared/      framework-free TS used by web and tests: JSON-RPC helpers, TapeOut name resolver, deployments schema
 e2e/         Playwright specs and the injected test wallet
 docs/        research, contracts, TapeOut binding, DeWEB, submission draft, demo script, handoff
 assets/      logo-clay.png (brand mark), logo.png (monochrome original)
@@ -60,7 +73,7 @@ Requires Node 20+ (tested on Node 22). The Solidity compiler comes from the `sol
 ```bash
 npm install                 # all workspaces
 npm run compile             # contracts
-npm test                    # 30 contract tests
+npm test                    # 47 contract tests (unit, fuzz/invariant, TapeOut resolver, deploy wiring)
 npm run build               # web → web/dist (relative paths)
 ```
 
@@ -85,6 +98,8 @@ DeWEB package: `npm run deweb:package` → `deweb-out/` (see `docs/deweb.md`).
 
 Probes (read-only): `npm run probe:network`, `npm run probe:tapeout`.
 
+Other checks: `npm run check:contrast` (theme pairings, both modes), `npm run screenshots` (regenerates `docs/screenshots/`), `npm run release:check` (fails while any placeholder, undeployed mainnet escrow, or unpublished DeWEB field remains). Larger fuzz campaign: `FUZZ_RUNS=20 FUZZ_STEPS=300 npx hardhat test test/BullaEscrow.invariants.test.ts` (from `contracts/`).
+
 Theme: colors, fonts and status hues follow [`docs/design/color-theme.md`](docs/design/color-theme.md) (tokens in `web/src/styles.css`, light, dark via `prefers-color-scheme`, and a manual Auto/Light/Dark toggle). `npm run check:contrast` verifies every pairing the UI uses against the theme targets.
 
 ## Environment variables
@@ -104,6 +119,7 @@ Copy `.env.example` to `.env` (gitignored). Never commit keys.
 | `TAPEOUT_PROCESSOR`, `TAPEOUT_CIRCUIT_ID` | probe-tapeout | your circuit |
 | `VITE_BULLA_NETWORK` | web build | `localhost`, `xlayerTestnet`, `xlayerMainnet` (default) |
 | `VITE_ESCROW_ADDRESS`, `VITE_ESCROW_TOKEN`, `VITE_RPC_URL` | web build | override `contracts/deployments.json` |
+| `VITE_DEPLOY_BLOCK` | web build | override the block the receipt timeline scans logs from |
 | `VITE_MOCK` | web build | `1` = dev fixtures only |
 
 Network facts (chain IDs, RPCs, explorers, USDC addresses, TapeOut contracts) and their sources are in `docs/research.md`.
@@ -117,7 +133,7 @@ ESCROW_TOKEN=0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3 FEE_RECIPIENT=0x... npm 
 ESCROW_TOKEN=0xB6CEceAB302E2E4948951eE7843FC24E92933061 FEE_RECIPIENT=0x... CONFIRM_MAINNET=I_UNDERSTAND_UNAUDITED npm run deploy:mainnet
 ```
 
-Without `DEPLOYER_PRIVATE_KEY` in `.env` both print a dry-run plan and exit non-zero. They never invent an address.
+Without `DEPLOYER_PRIVATE_KEY` in `.env` both print a dry-run plan and exit non-zero. They never invent an address. On success they write `contracts/deployments.json` in the schema the web app reads (`shared/deployments.ts`), so the UI only needs `npm run build` / `npm run deweb:package` afterwards.
 
 ## How Bulla differs from TapeFlow and CoTape
 
@@ -129,14 +145,15 @@ Without `DEPLOYER_PRIVATE_KEY` in `.env` both print a dry-run plan and exit non-
 
 - **Circuit container as identity:** every invoice stores the seller's TapeOut container id; the receipt links it.
 - **DeWEB / SiteRegistry:** the app is a static build packaged for the container's on-chain site store, opened by laypeople through the TapeKit gateway.
-- **TapeOut read APIs:** `probe:tapeout` reads factory, opener, SiteRegistry and DomainBinding on X Layer to derive and check the container id.
+- **TapeOut read APIs:** receipts on X Layer mainnet show the seller's `<#ID>.2.<cpu>.tape` name, resolved from `container.token()`, `factory.isCPU/cpuCount/cpuAt` and `opener.accountOf` (hidden if any check disagrees). `probe:tapeout` reads factory, opener, SiteRegistry and DomainBinding to derive and check the container id.
 
 Details and status: `docs/tapeout-binding.md`.
 
 ## Docs
 
 - [`docs/research.md`](docs/research.md): verified chain, token, and TapeOut facts with sources and UNKNOWNs
-- [`docs/contracts.md`](docs/contracts.md): states, callers, fee math, safety properties
+- [`docs/contracts.md`](docs/contracts.md): states, callers, fee math, accounting, safety properties, fuzz/invariant tests
+- [`docs/slither.md`](docs/slither.md): static analysis runs
 - [`docs/tapeout-binding.md`](docs/tapeout-binding.md): getting a real circuit container id
 - [`docs/deweb.md`](docs/deweb.md): DeWEB packaging, publishing, HTTPS fallback
 - [`docs/SUBMISSION-DRAFT.md`](docs/SUBMISSION-DRAFT.md): form answers with placeholders
