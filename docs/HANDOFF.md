@@ -1,8 +1,27 @@
 # Bulla handoff: what is not done
 
-Written 14 Nov 2026 at the end of the autonomous build, and updated the same day after the step 1 probes. Deadline: 7 Dec 2026, 23:59 UTC. Step 1 research is recorded below. Nothing here was signed, deployed, minted, published, funded, recorded as a demo, or submitted. `docs/handoff/phase-1.md` is superseded by this build (its scaffold now exists).
+Written 14 Nov 2026 at the end of the autonomous build, updated the same day after the step 1 probes, and updated 18 Nov 2026 for **BullaEscrow v2** (circuit-bound billing, 1 to 10 milestones, optional arbiter, container payout). Deadline: 7 Dec 2026, 23:59 UTC. Step 1 research is recorded below. Nothing here was signed, deployed, minted, published, funded, recorded as a demo, or submitted. `docs/handoff/phase-1.md` is superseded by this build (its scaffold now exists).
 
-What is done and verified (latest Claude Code run, 14 Nov 2026): `npm run compile`; `npm test` (50 passing: 30 unit, 8 fuzz/invariant, 5 TapeOut-name resolver, 5 deployments wiring incl. the judge block, 2 DemoUSD); `npm run check:contrast` (all pairings pass, light and dark); `npm run build`; `npm run e2e` (9 passing on a local Hardhat node, including `e2e/judge-mode.spec.ts`: one tap from the landing page to Released in **387 ms in-app / 923 ms wall clock**, limit 10 s; empty gas tank shows a clear message and sends nothing; the own-wallet path still works); `npm run e2e:testnet` skips cleanly without its env; `npm run deweb:package` (12 files, ~470 KB, no judge code, no key); `npm run screenshots` (16 PNGs incl. judge mode). Deploy scripts (`deploy:testnet`, `deploy:mainnet`, `deploy:judge`) were run only without a key and refused. Nothing was broadcast to any real network. `npm run release:check` correctly fails today.
+## v2 changes (18 Nov 2026)
+
+- **The contract changed; redeploy everything.** A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`); ignore it, do not link it. v2 has a different ABI and constructor.
+- **New constructor:** `BullaEscrow(token, opener, factory, feeRecipient, feeBps, initialOwner)`. `opener` and `factory` are TapeOut's, immutable.
+
+| Chain | token | opener | factory | Who supplies them |
+| --- | --- | --- | --- | --- |
+| X Layer mainnet (196) | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` (real) | `0x1f09DAeFA827f02CBb40967cc91b259763760761` (real) | hard-coded in `deploy-xlayer.ts`; any `TAPEOUT_*` override is refused; the web build and `deployments.json` validation refuse anything else on 196 |
+| X Layer testnet (1952), judge | DemoUSD (deployed by `deploy:judge`) | `MockOpener` stand-in | `MockTapeOutFactory` stand-in | `deploy:judge` deploys them (plus `MockProcessor`), labelled "testnet stand-in for TapeOut" in the UI, because TapeOut has no published testnet deployment |
+| X Layer testnet (1952), real token | testnet USDC `0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3` | judge stand-in opener (or `TAPEOUT_OPENER`) | judge stand-in factory (or `TAPEOUT_FACTORY`) | run `deploy:judge` first |
+| Local Hardhat | MockUSDC | stand-in | stand-in | `npm run deploy:local` / the E2E stack |
+
+`feeBps` is 50 and `initialOwner` is the deployer on every chain.
+
+- **Container payout facts** (verified on chain by Grok Bot, `docs/research.md` §9, source `docs/planning/win-audit/onchain-checks.md`): the container must be **opened** (`opener.isOpened`; open it in the official app, `open()` costs 0.08 OKB) or it reverts `NotPaid()`. An opened container withdraws with ERC-6551 `execute(to, value, data, 0)` (selector `0x51945447`; operation 1 reverts `OnlyCall()`), called by the circuit holder with `EXEC_FEE()` attached as `msg.value` (0.0013 OKB read on 18 Nov 2026; always read it live) or it reverts `ProtocolFeeTooLow`. v2 therefore keeps "Pay into my TapeOut container" opt-in and pays the holder whenever the container is not opened. The receipt shows a "How to withdraw from your container" note (execute with `EXEC_FEE`, or the official https://www.tapeout.net/containers UI). A USDC withdrawal through `execute` was not simulated end to end: **UNKNOWN** until the first real withdrawal.
+- **The public X Layer RPC rejects `eth_getLogs`.** The seller history panel reads the on-chain `circuitStats` view instead; timeline tx links stay best effort.
+- **TapeSend** hub is live on X Layer (proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee`, implementation `0xdCC57797089eBD9f26e686379A4323f353a3F9C6`, per `onchain-checks.md`) but out of scope for v2; the seam is `web/src/lib/notify.ts`.
+- **v2 checks, 18 Nov 2026:** `npm test` 57 passing; `npm run e2e` 10 passing; judge mode 12 transactions, 664 ms in-app and 982 ms from the tap to Released on a local node (limit 10 s); Slither 0 high, 0 medium, 4 low, 1 informational. Testnet timing is still not measured.
+
+What was done and verified at v1 (Claude Code run, 14 Nov 2026, kept for history): `npm run compile`; `npm test` (50 passing: 30 unit, 8 fuzz/invariant, 5 TapeOut-name resolver, 5 deployments wiring incl. the judge block, 2 DemoUSD); `npm run check:contrast` (all pairings pass, light and dark); `npm run build`; `npm run e2e` (9 passing on a local Hardhat node, including `e2e/judge-mode.spec.ts`: one tap from the landing page to Released in **387 ms in-app / 923 ms wall clock**, limit 10 s; empty gas tank shows a clear message and sends nothing; the own-wallet path still works); `npm run e2e:testnet` skips cleanly without its env; `npm run deweb:package` (12 files, ~470 KB, no judge code, no key); `npm run screenshots` (16 PNGs incl. judge mode). Deploy scripts (`deploy:testnet`, `deploy:mainnet`, `deploy:judge`) were run only without a key and refused. Nothing was broadcast to any real network. `npm run release:check` correctly fails today.
 
 Build environment limits that caused some of the items below: the original Claude Code sandbox could not reach X Layer RPCs (`rpc.xlayer.tech`, `testrpc.xlayer.tech` were refused by the sandbox egress proxy), could not download the Foundry installer or native solc (so the repo uses Hardhat + the `solc` npm package), and has no wallet. Step 1 probes and official-source lookups were later run from a machine that can reach those RPCs (14 Nov 2026, Africa/Lagos). A Slither run is recorded in `docs/slither.md`.
 
@@ -31,9 +50,13 @@ From `docs/research.md` §6. Outputs and sources are pasted there.
 
 ### 3. Testnet deploy (human, signed)
 
+Run step 3b's `deploy:judge` first: the real-token testnet escrow binds to the TapeOut stand-ins it deploys.
+
 ```bash
 cp .env.example .env   # then set DEPLOYER_PRIVATE_KEY locally, FEE_RECIPIENT, ESCROW_TOKEN
+FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> npm run deploy:judge     # step 3b.1
 ESCROW_TOKEN=0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3 FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> npm run deploy:testnet
+# -> BullaEscrow(testnet USDC, judge stand-in opener, judge stand-in factory, FEE_RECIPIENT, 50, deployer)
 ```
 
 Done: `contracts/deployments.json` `xlayerTestnet.escrow` is set; `ESCROW_ADDRESS=<addr> npm run probe:network` says `has code`; one full invoice run on testnet through the UI (`VITE_BULLA_NETWORK=xlayerTestnet npm run dev`). Commit `deployments.json`. Placeholder: `<<ESCROW_ADDRESS_TESTNET>>`.
@@ -42,25 +65,28 @@ Done: `contracts/deployments.json` `xlayerTestnet.escrow` is set; `ESCROW_ADDRES
 
 Judge mode is the one-tap demo on the landing page ("Try it now"): two burner keys created in the visitor's browser run mint, create, fund (lock), submit and release on X Layer testnet with valueless DemoUSD. Owner: **Grok Bot**. See also `docs/SUBMISSION-CHECKLIST.md` items 1 to 4.
 
-1. **Deploy** DemoUSD + the judge escrow with a testnet-only deployer key: `FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> npm run deploy:judge` (refuses any network but `xlayerTestnet`). Commit the `xlayerTestnet.judge` block it writes to `contracts/deployments.json`.
-2. **Gas tank:** create a dedicated throwaway key used for nothing else. Fund it from the official faucet https://web3.okx.com/xlayer/faucet (0.2 OKB per user per day per the X Layer docs). Each judge run tops each burner up to about 700k gas × gas price × 2, so check the tank on the testnet explorer before demos and top up daily if needed. **Never commit the key.**
+1. **Deploy** the TapeOut stand-ins (`MockTapeOutFactory`, `MockOpener`, `MockProcessor`), DemoUSD and the judge escrow `BullaEscrow(DemoUSD, stand-in opener, stand-in factory, FEE_RECIPIENT, 50, deployer)` with a testnet-only deployer key: `FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> npm run deploy:judge` (refuses any network but `xlayerTestnet`; the stand-in deployer refuses chain 196). Commit the `xlayerTestnet.judge` block (with `judge.tapeout`) it writes to `contracts/deployments.json`.
+2. **Gas tank:** create a dedicated throwaway key used for nothing else. Fund it from the official faucet https://web3.okx.com/xlayer/faucet (0.2 OKB per user per day per the X Layer docs). Each judge run tops each burner up to 1.2M gas × gas price, and a run is refused if it would exceed the per-run cap (`VITE_DEMO_RUN_CAP_WEI`, default 3M gas × gas price); the judge page shows the tank balance and runs left, so check the tank on the testnet explorer before demos and top up daily if needed. **Never commit the key.**
 3. **Important caveat:** the tank key is passed at build time as `VITE_DEMO_GAS_TANK_KEY` and is therefore embedded in the hosted judge build's JavaScript. Anyone who reads the bundle can spend the tank. That is acceptable only because it is a testnet key holding a few faucet OKB. Keep the balance small, never reuse the key, and **rotate it** (new key, re-fund, rebuild, re-host) if it is drained or after the event. Mainnet builds refuse to compile with the variable set, and `deweb:package` scans for it.
 4. **Build and host** the judge site: `VITE_BULLA_NETWORK=xlayerTestnet VITE_DEMO_GAS_TANK_KEY=… npm run build`, upload `web/dist/` to an HTTPS static host (Fluid's account). Then set `VITE_JUDGE_URL=<that URL>` for the mainnet/DeWEB build so its "Try it now" links there. Placeholder: `<<JUDGE_URL>>`.
-5. **Acceptance on testnet:** `E2E_TESTNET=1 VITE_DEMO_GAS_TANK_KEY=… npm run e2e:testnet`. It requires all 8 steps to link to `https://www.okx.com/web3/explorer/xlayer-test/tx/…` and finish within 60 s (`JUDGE_MAX_MS` to change), and prints the measured time; paste it into the checklist. This could not run in the build sandbox (X Layer RPCs blocked there), so testnet timing is **not yet measured**.
+5. **Acceptance on testnet:** `E2E_TESTNET=1 VITE_DEMO_GAS_TANK_KEY=… npm run e2e:testnet`. It requires all 12 steps to link to `https://www.okx.com/web3/explorer/xlayer-test/tx/…` and finish within 60 s (`JUDGE_MAX_MS` to change), and prints the measured time; paste it into the checklist. This could not run in the build sandbox (X Layer RPCs blocked there), so testnet timing is **not yet measured**.
 6. Done looks like: one tap on the hosted judge URL reaches Released, each step's OKX explorer link opens, and an empty tank shows "Demo gas tank empty" rather than a fake success.
 
-### 4. Mainnet deploy (human, signed, after step 1 token gate)
+### 4. Mainnet deploy of v2 (human, signed, after step 1 token gate)
 
 ```bash
 ESCROW_TOKEN=0xB6CEceAB302E2E4948951eE7843FC24E92933061 FEE_RECIPIENT=<<FEE_RECIPIENT_ADDRESS>> \
 CONFIRM_MAINNET=I_UNDERSTAND_UNAUDITED npm run deploy:mainnet
+# -> BullaEscrow(USDC, 0x536adD8F30f03b69f6fbF29d425A816A0dC50106, 0x1f09DAeFA827f02CBb40967cc91b259763760761, FEE_RECIPIENT, 50, deployer)
 ```
+
+The script writes `xlayerMainnet.escrow` and the official `tapeout` binding; it refuses `TAPEOUT_*` overrides on mainnet. No mock is ever deployed on 196.
 
 Optionally verify the source on the OKX explorer (docs: https://web3.okx.com/onchainos/dev-docs/xlayer/developer/verify-a-smart-contract/verifying-contract). Done: `xlayerMainnet.escrow` set and committed; explorer shows the contract. Placeholder: `<<ESCROW_ADDRESS_MAINNET>>`.
 
 ### 5. TapeOut circuit and container (human, signed)
 
-Follow `docs/tapeout-binding.md`. Done: `npm run probe:tapeout` with `TAPEOUT_PROCESSOR`/`TAPEOUT_CIRCUIT_ID` prints `opened true` and `holder` = the circuit-holder wallet. Placeholders: `<<TAPEOUT_PROCESSOR_ADDRESS>>`, `<<PROCESSOR_NUMBER>>`, `<<CIRCUIT_ID>>`, `<<CONTAINER_ADDRESS>>`.
+Follow `docs/tapeout-binding.md`. **Open the container** in the official app (https://www.tapeout.net/containers, 0.08 OKB) if invoices should pay into it; until then releases go to the holder. Done: `npm run probe:tapeout` with `TAPEOUT_PROCESSOR`/`TAPEOUT_CIRCUIT_ID` prints `opened true` and `holder` = the circuit-holder wallet. Placeholders: `<<TAPEOUT_PROCESSOR_ADDRESS>>`, `<<PROCESSOR_NUMBER>>`, `<<CIRCUIT_ID>>`, `<<CONTAINER_ADDRESS>>`.
 
 ### 6. DeWEB publish (human, signed)
 
@@ -72,7 +98,7 @@ Checklist in `docs/deweb.md`. Done: mirror shows the same receipt. Placeholder: 
 
 ### 8. Demo invoices on mainnet (human, signed, real funds)
 
-One invoice through to **Released** (receipt for the form) and one Funded invoice with a short due date for the refund shot. Done: both receipts open on the gateway. Placeholder: `<<DEMO_INVOICE_ID>>`.
+One milestone invoice created with the real circuit and "Pay into my TapeOut container" on, with at least one milestone **Released** into the opened container (receipt and explorer shot for the form and the video; note the release tx hash) and one Funded invoice with a short due date for the refund shot. Done: both receipts open on the gateway. Placeholder: `<<DEMO_INVOICE_ID>>`.
 
 ### 9. Demo video (human)
 
@@ -100,7 +126,8 @@ The build sandbox cannot reach X Layer RPCs, so these were verified only against
 - Further bundle cuts if upload gas matters: swapping React for Preact (compat) would save roughly another 120 KB; replacing `@tanstack/react-query` with small hooks about 35 KB. Not done, to avoid a framework change this close to the deadline.
 - Foundry port of the tests if Foundry becomes installable (optional; Hardhat is the chosen toolchain).
 - Find an official OKX developer page for the `window.okxwallet` provider name (research §7 marks it UNKNOWN-official; the generic browser-wallet connector covers OKX Wallet anyway).
-- Judge mode on testnet uses a local fixture container id because TapeOut has no published testnet deployment; if one appears, bind the judge invoices to a real testnet container.
+- Judge mode on testnet uses TapeOut stand-ins because TapeOut has no published testnet deployment; if one appears, redeploy the judge escrow with the real testnet opener and factory.
+- First real container withdrawal: call `execute(USDC, 0, transfer(to, amount), 0)` from the holder with `EXEC_FEE()` attached (or use tapeout.net) and record the tx in `docs/research.md`; this removes the last container UNKNOWN.
 
 ## Secrets check
 

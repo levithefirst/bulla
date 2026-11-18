@@ -1,96 +1,107 @@
-# Bulla: X Layer TapeOut Accelerate submission draft
+# Bulla: milestone escrow where your TapeOut circuit is your business account
 
-Form: Google Form linked from https://web3.okx.com/xlayer/build-x-series. Deadline 7 Dec 2026, 23:59 UTC. A human submits; nothing here has been submitted.
+Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked from https://web3.okx.com/xlayer/build-x-series. Deadline 7 Dec 2026, 23:59 UTC (internal target 6 Dec, `docs/SUBMISSION-CHECKLIST.md`). A human (Fluid) submits; nothing here has been submitted.
 
-Placeholders are UPPER_CASE names in double angle brackets. Replace every one before submitting; `npm run release:check` lists any that remain.
+Placeholders are UPPER_CASE names in double angle brackets. Replace every one before submitting; `npm run release:check` lists any that remain. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
 
-## Links and identifiers
+**One-liner:** Freelancers send a milestone invoice, the client locks USDC on X Layer, and each release pays the freelancer's TapeOut circuit (its holder, or straight into the circuit's container if the freelancer opts in), with a public receipt anyone can open without a wallet.
+
+Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 freelancers found 29% of invoices were paid at least a day late (https://www.hellobonsai.com/blog/late-freelance-payment). Bulla flips the default. The client funds every milestone up front into an escrow contract on X Layer, the freelancer submits proof of delivery for each milestone, and the client releases each one. Anything not released by the due date is refunded to the client. Every invoice is bound to the freelancer's TapeOut circuit and verified on chain (only the circuit's holder can bill with it), and payments go to that circuit's holder or into its container, so the freelancer's receivables and payment history live with the circuit. The app is a static site built to be served from that container on DeWEB.
+
+## 1. Try it in one tap
+
+- Judge URL (X Layer testnet, no wallet needed): `<<JUDGE_URL>>`
+- What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to the OKX explorer.
+- Measured: `<<TESTNET_JUDGE_SECONDS>>` seconds on X Layer testnet (from `npm run e2e:testnet`). On a local node the same 12-transaction loop takes 0.7 s in-app (664 ms) and 1.0 s from the tap (982 ms) (`e2e/judge-mode.spec.ts`, 18 Nov 2026). Use only the measured testnet number in the form.
+
+## 2. Live on mainnet
 
 | Field | Value |
 | --- | --- |
-| Access link (DeWEB, canonical) | `<<DEWEB_GATEWAY_URL>>` (TapeKit gateway URL for `<<CIRCUIT_ID>>.2.<<PROCESSOR_NUMBER>>.tape`) |
+| BullaEscrow v2 (X Layer, chain 196) | `<<ESCROW_ADDRESS_MAINNET>>` |
+| A real receipt | `<<DEWEB_GATEWAY_URL>>#/invoice/<<DEMO_INVOICE_ID>>` |
+| DeWEB access link (canonical) | `<<DEWEB_GATEWAY_URL>>` (TapeKit gateway for `<<CIRCUIT_ID>>.2.<<PROCESSOR_NUMBER>>.tape`) |
 | HTTPS mirror (optional) | `<<HTTPS_MIRROR_URL>>` |
-| Judge mode (testnet, one tap) | `<<JUDGE_URL>>` |
-| Sample receipt | `<<DEWEB_GATEWAY_URL>>#/invoice/<<DEMO_INVOICE_ID>>` |
-| BullaEscrow contract (X Layer, chain 196) | `<<ESCROW_ADDRESS_MAINNET>>` |
-| Escrow token | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` (Circle's X Layer address; confirm with `npm run probe:network` before submitting) |
+| Escrow token | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` (Circle's X Layer address; symbol and 6 decimals probed, `docs/research.md` §2) |
+| TapeOut opener / factory the escrow is bound to | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` / `0x1f09DAeFA827f02CBb40967cc91b259763760761` (official X Layer, `docs/research.md` §8) |
 | Processor contract address | `<<TAPEOUT_PROCESSOR_ADDRESS>>` |
 | Circuit ID | `<<CIRCUIT_ID>>` |
 | Circuit container | `<<CONTAINER_ADDRESS>>` |
-| DeWEB site manifest SHA-256 | `<<SITE_MANIFEST_SHA256>>` (from `deweb-out/manifest.json`) |
-| Testnet escrow (optional) | `<<ESCROW_ADDRESS_TESTNET>>` |
+| Real invoices settled (consented counterparties) | `<<REAL_INVOICE_LINKS_OR_NONE_YET>>` |
+| DeWEB site manifest SHA-256 | `<<SITE_MANIFEST_SHA256>>` |
+| Testnet escrow and judge escrow (optional) | `<<ESCROW_ADDRESS_TESTNET>>`, `<<JUDGE_ESCROW_ADDRESS_TESTNET>>` |
 | Demo video | `<<VIDEO_URL>>` |
-| Code | private repository; access on request |
+| Code | `<<REPO_LINK_OR_PRIVATE>>` (visibility is Fluid's decision) |
 
-## One-liner
+A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`). Do not link it; v2 replaces it.
 
-Bulla is a milestone invoice with on-chain escrow on X Layer: the client funds in USDC, the freelancer submits the delivery, the client releases, and a time-lock refunds the client if nothing is released. Every invoice has a public receipt anyone can open without a wallet, served from the seller's TapeOut circuit container on DeWEB.
+## 3. How Bulla uses TapeOut and X Layer
 
-## Product
+| Feature | What Bulla does with it | On chain |
+| --- | --- | --- |
+| TapeOut processor `ownerOf` (TapeKit SPEC B.3) | `createInvoice` requires the caller to hold the circuit; every release re-reads the holder, so receivables follow the circuit if it changes hands | processor `<<TAPEOUT_PROCESSOR_ADDRESS>>` |
+| TapeOut factory `isCPU` (B.1) | Only real TapeOut processors can be used to bill | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
+| TapeOut opener `accountOf` (B.2) | The circuit's ERC-6551 container is stored per invoice; the seller can opt in to receive releases there | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
+| Container `token()` (B.4) + factory list | Receipts show the seller's `<#ID>.2.<cpu>.tape` name, checked both ways | read-only |
+| DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | `<<DEWEB_GATEWAY_URL>>` |
+| X Layer settlement (196; testnet 1952 for judge mode) | Escrow, milestones, fees and refunds are X Layer transactions | `<<ESCROW_ADDRESS_MAINNET>>` |
+| Native USDC on X Layer | The only token the mainnet escrow accepts | `0xB6CEceAB302E2E4948951eE7843FC24E92933061` |
+| OKX Wallet + OKX explorer | OKX Wallet is the recommended connector; every tx and address links to the OKX explorer | n/a |
 
-- Seller (freelancer) creates an invoice: buyer address, amount, due date, optional agreed-deliverable hash, and the TapeOut circuit container the invoice is bound to.
-- Buyer (client) approves and funds. Funds sit in the `BullaEscrow` contract, not with either party.
-- Seller submits a delivery hash and optional link (IPFS, HTTPS, or a `tape://` site).
-- Buyer releases: the seller receives the amount minus a 0.5% fee. If not released by the due date, the buyer reclaims the full amount. Both parties can agree to cancel at any point before close.
-- The receipt page shows status, amounts, fee, timeline with explorer links, delivery hash, and the container id. It can be copied and printed.
-- No backend and no accounts: the app is a static site; all state is on X Layer.
+Not all logic runs in a circuit: escrow and state live in a companion Solidity contract on X Layer; TapeOut provides the identity (circuit), the payout account (container) and the hosting (DeWEB). Not used: Fab X mining, TapeCode, TapeSend. The X Layer TapeSend hub is live (proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee`, `docs/research.md` §9) but out of scope for v2; a clean seam exists in `web/src/lib/notify.ts`.
+
+## 4. Users and how we reach them
+
+- **Who:** crypto-paid freelancers and small studios (design, development, writing, community work) and their clients, who get a refund guarantee they can verify.
+- **First channels:** OKX Wallet, X Layer and TapeOut communities, where builders already sell work to each other.
+- **Growth loop:** every invoice is a link the client must open, and every receipt has a share kit (QR, X, Telegram), so each paid invoice brings Bulla to a new client.
+- **Next:** freelancer and DAO-contributor Telegram groups.
+- **Current users:** `<<USER_COUNT_OR_NONE_YET>>`. No usage numbers are claimed until they exist.
+
+## 5. Revenue and retention
+
+- **Revenue:** 0.5% (50 bps, fixed at deploy) on each successful milestone release. Refunds, arbiter refunds and cancels are free. No subscription. The fee is Bulla's own, not an X Layer or TapeOut protocol fee. Revenue to date: `<<REVENUE_TO_DATE_OR_NONE>>`.
+- **Why they pay:** the fee is smaller than the cost of one late invoice and is charged only when the freelancer gets paid; clients fund up front because the refund date is enforced by the contract.
+- **Why they stay:** the circuit carries a public, verifiable payment history (released milestones and volume on every receipt), repeat clients reuse the same flow, and receivables move with the circuit.
+
+## 6. Built during the event
+
+First commit: 14 Nov 2026 (`git log`, commit `de78f30`). All code and docs are new work done during the event window (16 Oct to 7 Dec 2026).
+
+## 7. Limits
+
+Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in and wallet payout is the default, because a container only works once opened (`open()`, 0.08 OKB) and withdrawing needs the holder to call `execute` with `EXEC_FEE()` attached (verified on chain, `docs/research.md` §9; a USDC withdrawal through `execute` has not been simulated end to end); releases to an unopened container fall back to the holder; the judge-mode gas key is a public, throwaway testnet key by design; judge mode uses labelled testnet stand-ins because TapeOut has no testnet deployment.
 
 ## The problem (approved citations only)
 
-Late payment is routine for freelancers and contractors:
-
 - Bonsai's 2025 data on 100k+ freelancers: 29% of invoices were paid at least one day late. https://www.hellobonsai.com/blog/late-freelance-payment
 - Remote: 85% of contractors are paid late at least sometimes, and 21% more than half the time. https://remote.com/blog/contractor-management/reversing-late-payment-culture
-- IPSE (UK): about 32–35% of the self-employed had a client payment delay in the prior 12 months. Source: ipse.co.uk prompt-payment campaign pages.
+- IPSE (UK): about 32 to 35% of the self-employed had a client payment delay in the prior 12 months. Source: ipse.co.uk prompt-payment campaign pages.
 
-Escrow changes the default: the money is committed before work starts, and the release rule is public.
+## Product details
 
-## Target users and how we reach them
+- The seller bills 1 to 10 milestones (label and amount each) with a TapeOut circuit they hold, a due date, an optional scope hash and an optional arbiter.
+- The buyer funds the whole invoice in one transaction and accepts the arbiter if one was proposed.
+- The seller submits a delivery hash and optional link per milestone; the buyer releases each milestone (the 0.5% fee applies per release). The arbiter, if any, can release or refund a submitted milestone and takes no fee.
+- After the due date the buyer can reclaim every unreleased milestone; a mutual cancel returns the unreleased remainder. Released milestones stay paid.
+- Payout: the circuit's current holder by default, or the circuit's container if the seller opted in and the container is opened (otherwise the holder). The receipt explains how to withdraw from the container (`execute` with `EXEC_FEE()`, or the official tapeout.net UI).
+- The receipt shows milestones, amounts and fees, payout target, circuit and container, arbiter, timeline with explorer links, the seller's history, a QR code and share links. No wallet, no backend, no account.
 
-- Primary: freelancers and small studios already paid in stablecoins (designers, developers, writers, community managers) who work with crypto-native clients.
-- Secondary: their clients, who get a refund guarantee they can verify without trusting the freelancer.
-- Reach: every invoice is a share link the client must open, so each paid invoice puts Bulla in front of a new client; X Layer and OKX Wallet communities; crypto freelancer groups and DAO contributor channels; the TapeOut ecosystem, where DeWEB site builders already sell work to each other.
-- Current users: `<<USER_COUNT_OR_NONE_YET>>`. No usage numbers are claimed in this draft.
+## Mapping to the five official judging criteria
 
-## Revenue
+Source: https://web3.okx.com/xlayer/build-x-series (five criteria, re-read 18 Nov 2026 per `docs/planning/win-audit/WIN-AUDIT.md` §2).
 
-- 0.5% fee (50 bps, set at deploy) skimmed only when the buyer releases funds. No fee on refunds or cancels, no subscription.
-- The fee is Bulla's own and goes to a fee-recipient address; it is not an X Layer or TapeOut protocol fee.
-- Revenue to date: `<<REVENUE_TO_DATE_OR_NONE>>`.
-
-## Why users pay and stay
-
-- The fee is smaller than the cost of one late invoice, and it only applies when the deal completes.
-- Clients get a hard refund date, so they are willing to fund up front.
-- Repeat work: one invoice per milestone, so ongoing clients generate a stream of invoices.
-- The receipt is a durable, public record of completed paid work that a freelancer can link in a portfolio.
-- No account to lose and no server to go down: the app and records live on X Layer.
-
-## How Bulla uses X Layer (mirror of the README section)
-
-X Layer is the core loop: every lock, delivery and release is an X Layer transaction. Each row is wired in the code; before submitting, update "status" to what is live (`docs/HANDOFF.md`). Sources: `docs/research.md` §1 to §3 and §7.
-
-| # | X Layer / OKX feature | What is wired | Where | Status |
-| --- | --- | --- | --- | --- |
-| 1 | **X Layer settlement** (mainnet 196, testnet 1952) | `BullaEscrow` holds funds and state on X Layer; the app reads every receipt straight from an X Layer RPC; the judge-mode loop runs on testnet 1952 | `contracts/`, `web/src/config.ts`, `web/src/judge/` | Code and deploy scripts done; testnet and mainnet deploys pending (human) |
-| 2 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to the X Layer network; "Get OKX Wallet" link when not installed; any other injected wallet still works | `web/src/lib/wallet.tsx`, `web/src/components/Wallet.tsx` | Done (official provider-name doc not found; see research §7) |
-| 3 | **OKX explorer deep links** on every tx | Toasts, the receipt timeline, every judge-mode step and every address link open the OKX X Layer explorer | `web/src/config.ts` (`explorerTx`, `explorerAddress`), `web/src/judge/JudgePage.tsx` | Done; mainnet `/tx/` path confirmed, testnet path to confirm on first click |
-| 4 | **Native USDC on X Layer** for real mode | Real-token escrow is bound to Circle's X Layer USDC (`0xB6Ce…3061`, 6 decimals probed); judge mode uses valueless DemoUSD instead | `contracts/deployments.json`, `contracts/scripts/deploy-xlayer.ts` | Token confirmed; escrow deploy pending |
-| 5 | **TapeOut circuit, container and DeWEB hosting** | Every invoice stores the seller's TapeOut container; mainnet receipts show the seller's `<#ID>.2.<cpu>.tape` name; the app is packaged for the container's SiteRegistry site | `contracts/contracts/BullaEscrow.sol`, `shared/tapeoutCore.ts`, `scripts/deweb-package.ts` | Wired; circuit mint and DeWEB publish pending (human) |
-
-How this maps to the official judging criteria:
-
-- **User value and commercial potential.** Late payment is a common freelancer problem (see "The problem" above). Settlement in native USDC on X Layer (rows 1, 4) means the client funds up front and the freelancer is paid on release; Bulla earns 0.5% only on successful releases.
-- **Innovation.** The escrow's identity and its public receipt live in the seller's TapeOut container on DeWEB (row 5), not on a server; judge mode shows a full escrow loop with no wallet setup, in one tap (row 1).
-- **Ecosystem integration.** Five X Layer and OKX pieces are used together: X Layer settlement, OKX Wallet, the OKX explorer, native USDC, and TapeOut container plus DeWEB (rows 1 to 5).
-- **Product readiness and UX.** One tap from the landing page runs lock, deliver and release on X Layer testnet, with an OKX explorer link per step; the local acceptance test does it in under a second (limit 10 s). Receipts need no wallet; real mode uses OKX Wallet (rows 2, 3).
-
-Judge-mode link for judges (testnet, one tap): `<<JUDGE_URL>>`.
-
-Not all logic runs in a circuit: escrow and state live in a companion Solidity contract on X Layer; the TapeOut container is the identity and the hosting home. Not used: TapeSend, Fab X mining, TapeCode.
+| Criterion | Where Bulla answers it |
+| --- | --- |
+| User Value and Commercial Potential | Cited late-payment pain; real multi-milestone escrow with an optional arbiter; 0.5% only on release; receipt share loop; `<<REAL_INVOICE_LINKS_OR_NONE_YET>>` |
+| Innovation | "Your TapeOut circuit is your business account": billing is gated by `ownerOf`, payouts follow the circuit or land in its container, and the circuit carries a public payment history |
+| Ecosystem Integration | TapeOut processor, factory, opener and container reads on X Layer; DeWEB and the TapeKit gateway; native USDC; OKX Wallet and explorer |
+| Product Readiness and UX | One tap runs the full loop on X Layer testnet (`<<TESTNET_JUDGE_SECONDS>>` s); live mainnet escrow and receipts; 57 contract tests, 10 E2E tests, Slither notes |
+| Demo Video (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut) | `<<VIDEO_URL>>`, script in `docs/DEMO.md`: a live release before 0:10, the container receiving USDC on the explorer, a real mainnet invoice, the business model on screen |
 
 ## Risks and honesty notes
 
-- `BullaEscrow` is unaudited v1.
-- Whoever holds the TapeOut circuit controls its container. This is not safe if that wallet is stolen. Funds are governed by the escrow rules, not by the circuit.
-- The buyer can refund after the due date even after a delivery was submitted; sellers should set due dates with review time.
+- `BullaEscrow` v2 is unaudited.
+- Whoever holds the TapeOut circuit controls its container and receives future releases. This is not safe if that wallet is stolen.
+- Seller actions (submit, cancel) stay with the address that created the invoice; only payouts follow the circuit.
+- The buyer can refund unreleased milestones after the due date even if they were submitted; sellers should set due dates with review time, or name an arbiter.
