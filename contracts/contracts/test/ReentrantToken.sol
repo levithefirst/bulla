@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 interface IBullaEscrowLike {
-    function releaseFunds(uint256 id) external;
+    function releaseMilestone(uint256 id, uint256 index) external;
     function claimRefund(uint256 id) external;
     function mutualCancel(uint256 id) external;
 }
@@ -35,7 +35,7 @@ contract ReentrantToken is ERC20 {
         if (from == address(escrow) && attack != Attack.None) {
             Attack a = attack;
             attack = Attack.None; // one shot
-            if (a == Attack.Release) escrow.releaseFunds(targetId);
+            if (a == Attack.Release) escrow.releaseMilestone(targetId, 0);
             else if (a == Attack.Refund) escrow.claimRefund(targetId);
             else if (a == Attack.Cancel) escrow.mutualCancel(targetId);
         }
@@ -58,5 +58,24 @@ contract FeeOnTransferToken is ERC20 {
         } else {
             super._update(from, to, value);
         }
+    }
+}
+
+/// @notice Test-only processor whose ownerOf can be switched to revert (simulates a burned circuit).
+contract TogglingProcessor {
+    mapping(uint256 => address) public owners;
+    bool public broken;
+
+    function set(uint256 id, address o) external {
+        owners[id] = o;
+    }
+
+    function breakIt(bool b) external {
+        broken = b;
+    }
+
+    function ownerOf(uint256 id) external view returns (address) {
+        require(!broken, "burned");
+        return owners[id];
     }
 }

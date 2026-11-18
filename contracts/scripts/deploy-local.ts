@@ -10,9 +10,8 @@
  */
 import { ethers, network } from "hardhat";
 import { writeDeployment } from "./deployments";
+import { deployTapeOutStandIns } from "./tapeout-standins";
 
-// Local-only fixture container id. NOT a real TapeOut container (see docs/tapeout-binding.md).
-export const FIXTURE_CONTAINER_ID = ethers.zeroPadValue("0x00000000000000000000000000000000b0110a00", 32);
 
 async function main() {
   if (network.name !== "localhost" && network.name !== "hardhat") {
@@ -26,8 +25,13 @@ async function main() {
   const token = await Token.deploy("Mock USDC", "mUSDC", 6);
   await token.waitForDeployment();
 
+  // TapeOut stand-ins (local only); the seller mints stand-in circuit #1.
+  const tapeout = await deployTapeOutStandIns();
+  const processor = await ethers.getContractAt("MockProcessor", tapeout.processor!);
+  await (await processor.connect(seller).mint()).wait();
+
   const Escrow = await ethers.getContractFactory("BullaEscrow");
-  const escrow = await Escrow.deploy(await token.getAddress(), feeRecipient.address, feeBps, deployer.address);
+  const escrow = await Escrow.deploy(await token.getAddress(), tapeout.opener, tapeout.factory, feeRecipient.address, feeBps, deployer.address);
   await escrow.waitForDeployment();
   const receipt = await escrow.deploymentTransaction()!.wait();
 
@@ -37,9 +41,19 @@ async function main() {
   if (process.env.SEED_FIXTURE_INVOICE !== "0") {
     const due = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
     await (
-      await escrow
-        .connect(seller)
-        .createInvoice(buyer.address, await token.getAddress(), 250n * 10n ** 6n, due, ethers.ZeroHash, FIXTURE_CONTAINER_ID, "Fixture: logo design, milestone 1")
+      await escrow.connect(seller).createInvoice({
+        buyer: buyer.address,
+        token: await token.getAddress(),
+        amounts: [100n * 10n ** 6n, 150n * 10n ** 6n],
+        labels: ["Logo concepts", "Final logo files"],
+        dueTimestamp: due,
+        processor: tapeout.processor!,
+        circuitId: 1,
+        payToContainer: false,
+        arbiter: ethers.ZeroAddress,
+        termsHash: ethers.ZeroHash,
+        memo: "Fixture: logo design",
+      })
     ).wait();
   }
 
@@ -55,7 +69,8 @@ async function main() {
     feeBps,
     deployedAt: new Date().toISOString(),
     deployBlock: receipt?.blockNumber ?? null,
-    note: "Local dev only. Dev accounts: #1 seller, #2 buyer, #3 feeRecipient.",
+    tapeout,
+    note: "Local dev only. TapeOut stand-ins; seller holds stand-in circuit #1. Dev accounts: #1 seller, #2 buyer, #3 feeRecipient.",
   });
   console.log({ escrow: await escrow.getAddress(), token: await token.getAddress(), seller: seller.address, buyer: buyer.address });
 }

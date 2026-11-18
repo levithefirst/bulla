@@ -12,7 +12,8 @@
  * the token must have been probed (see docs/research.md "Mainnet token decision gate").
  */
 import { ethers, network } from "hardhat";
-import { writeDeployment } from "./deployments";
+import { readDeployments, writeDeployment } from "./deployments";
+import { assertOfficialTapeOut, XLAYER_TAPEOUT_OFFICIAL, type TapeOutBinding } from "../../shared/deployments";
 
 const EXPECTED_CHAIN: Record<string, number> = { xlayerTestnet: 1952, xlayerMainnet: 196 };
 // From Circle's official list (docs/research.md §2). Used only for a warning, never as a silent default.
@@ -35,12 +36,29 @@ async function main() {
   const feeBps = Number(process.env.FEE_BPS ?? 50);
   const hasKey = !!process.env.DEPLOYER_PRIVATE_KEY;
 
-  console.log("BullaEscrow deploy plan");
+  // TapeOut binding: mainnet = the official X Layer opener + factory (no override possible);
+  // testnet = the stand-ins written by deploy:judge (TapeOut has no testnet deployment).
+  let tapeout: TapeOutBinding;
+  if (name === "xlayerMainnet") {
+    if (process.env.TAPEOUT_OPENER || process.env.TAPEOUT_FACTORY) fail("TAPEOUT_OPENER / TAPEOUT_FACTORY overrides are not allowed on mainnet.");
+    tapeout = { opener: XLAYER_TAPEOUT_OFFICIAL.opener, factory: XLAYER_TAPEOUT_OFFICIAL.factory, processor: null, standIn: false };
+    assertOfficialTapeOut(tapeout, "deploy-xlayer");
+  } else {
+    const j = readDeployments().networks.xlayerTestnet?.judge?.tapeout;
+    const opener = process.env.TAPEOUT_OPENER?.trim() || j?.opener || "";
+    const factory = process.env.TAPEOUT_FACTORY?.trim() || j?.factory || "";
+    if (!ethers.isAddress(opener) || !ethers.isAddress(factory)) fail("testnet needs TapeOut stand-ins: run npm run deploy:judge first (or set TAPEOUT_OPENER and TAPEOUT_FACTORY).");
+    tapeout = { opener, factory, processor: j?.processor ?? null, standIn: true };
+  }
+
+  console.log("BullaEscrow v2 deploy plan");
   console.log("  network       :", name, `(expected chainId ${EXPECTED_CHAIN[name]})`);
   console.log("  rpc           :", (network.config as { url?: string }).url);
   console.log("  ESCROW_TOKEN  :", token || "(missing)");
   console.log("  FEE_RECIPIENT :", feeRecipient || "(missing)");
   console.log("  FEE_BPS       :", feeBps);
+  console.log("  TapeOut opener:", tapeout.opener, tapeout.standIn ? "(testnet stand-in)" : "(official X Layer)");
+  console.log("  TapeOut factory:", tapeout.factory);
   console.log("  key present   :", hasKey ? "yes (value not printed)" : "no");
 
   if (!token || !ethers.isAddress(token)) fail("ESCROW_TOKEN is missing or not an address. No default is invented.");
@@ -72,7 +90,8 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("  deployer      :", deployer.address);
   const Escrow = await ethers.getContractFactory("BullaEscrow");
-  const escrow = await Escrow.deploy(token, feeRecipient, feeBps, deployer.address);
+  if (name === "xlayerMainnet") assertOfficialTapeOut(tapeout, "deploy-xlayer (pre-broadcast)");
+  const escrow = await Escrow.deploy(token, tapeout.opener, tapeout.factory, feeRecipient, feeBps, deployer.address);
   await escrow.waitForDeployment();
   const receipt = await escrow.deploymentTransaction()!.wait();
   const address = await escrow.getAddress();
@@ -89,6 +108,7 @@ async function main() {
     feeBps,
     deployedAt: new Date().toISOString(),
     deployBlock: receipt?.blockNumber ?? null,
+    tapeout,
   });
 }
 

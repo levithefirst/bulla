@@ -8,6 +8,7 @@
  */
 import { ethers, network } from "hardhat";
 import { writeJudgeDeployment } from "./deployments";
+import { deployTapeOutStandIns } from "./tapeout-standins";
 
 function fail(msg: string): never {
   console.error(`\nREFUSING TO DEPLOY JUDGE MODE: ${msg}\n`);
@@ -20,7 +21,7 @@ async function main() {
   const feeBps = Number(process.env.FEE_BPS ?? 50);
   const hasKey = !!process.env.DEPLOYER_PRIVATE_KEY;
   console.log("Bulla judge-mode deploy plan (X Layer testnet)");
-  console.log("  contracts     : DemoUSD (capped public mint) + BullaEscrow(DemoUSD)");
+  console.log("  contracts     : TapeOut stand-ins (MockTapeOutFactory, MockOpener, MockProcessor), DemoUSD, BullaEscrow v2(DemoUSD)");
   console.log("  FEE_RECIPIENT :", feeRecipient || "(missing)");
   console.log("  FEE_BPS       :", feeBps);
   console.log("  key present   :", hasKey ? "yes (value not printed)" : "no");
@@ -33,11 +34,13 @@ async function main() {
   if (Number(net.chainId) !== 1952) fail(`RPC reports chainId ${net.chainId}, expected 1952.`);
 
   const [deployer] = await ethers.getSigners();
+  const tapeout = await deployTapeOutStandIns();
   const demo = await (await ethers.getContractFactory("DemoUSD")).deploy();
   await demo.waitForDeployment();
-  const escrow = await (await ethers.getContractFactory("BullaEscrow")).deploy(await demo.getAddress(), feeRecipient, feeBps, deployer.address);
+  const escrow = await (await ethers.getContractFactory("BullaEscrow")).deploy(await demo.getAddress(), tapeout.opener, tapeout.factory, feeRecipient, feeBps, deployer.address);
   await escrow.waitForDeployment();
   const rc = await escrow.deploymentTransaction()!.wait();
+  console.log("  stand-ins     :", JSON.stringify(tapeout));
   console.log("  DemoUSD       :", await demo.getAddress());
   console.log("  BullaEscrow   :", await escrow.getAddress(), "block", rc?.blockNumber);
   writeJudgeDeployment("xlayerTestnet", {
@@ -47,6 +50,7 @@ async function main() {
     feeRecipient,
     feeBps,
     deployedAt: new Date().toISOString(),
+    tapeout,
   });
 }
 

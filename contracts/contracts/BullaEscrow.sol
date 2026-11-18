@@ -7,24 +7,48 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @title BullaEscrow
+/// @notice TapeOut processor (circuit NFT, ERC-721). TapeKit SPEC Appendix B.3.
+interface ITapeOutProcessor {
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+/// @notice TapeOut container opener. TapeKit SPEC Appendix B.2.
+interface ITapeOutOpener {
+    function accountOf(address circuits, uint256 tokenId) external view returns (address);
+}
+
+/// @notice TapeOut processor factory. TapeKit SPEC Appendix B.1.
+interface ITapeOutFactory {
+    function isCPU(address processor) external view returns (bool);
+}
+
+/// @title BullaEscrow v2
 /// @author Bulla
-/// @notice Milestone invoice with ERC-20 escrow. UNAUDITED v1.
-/// @dev Flow: Draft -> Funded -> Submitted -> Released | Refunded, plus a two-consent mutual
-/// cancel (Cancelled, refunding the buyer if funds were held). States only move forward.
+/// @notice Milestone invoices with ERC-20 escrow, bound on chain to the seller's TapeOut circuit. UNAUDITED.
+/// @dev Invoice states: Draft -> Funded -> Completed | Refunded | Cancelled (forward only).
+/// Milestone states: Pending -> Submitted -> Released | Refunded (forward only; Pending -> Released and
+/// Pending -> Refunded are allowed for early release, time-lock refund and cancel).
 ///
-/// Each invoice stores a `circuitContainerId`: the TapeOut circuit container (ERC-6551 account
-/// address, left-padded to bytes32) the seller binds the invoice to. It is a binding and a
-/// pointer only. This contract never calls TapeOut and does not run any circuit logic.
+/// Circuit binding: the seller names a TapeOut processor and circuit id. `createInvoice` requires the
+/// processor to be a TapeOut processor (`factory.isCPU`) and the caller to hold the circuit
+/// (`processor.ownerOf`). The circuit's container (ERC-6551 account) is computed with
+/// `opener.accountOf` and stored.
 ///
-/// Trust model: the owner can change `feeRecipient` and nothing else. The owner can never move
-/// user funds, change the fee rate, or change the token. Only the invoice's buyer can fund,
-/// release, and refund; only its seller can submit; only those two can cancel.
+/// Payout rule (each release, re-checked live):
+///  - `payToContainer == true`: pay the circuit's container. The container follows the circuit, so whoever
+///    holds the circuit controls the funds. Whether a container can move ERC-20 out is UNKNOWN (see
+///    docs/research.md section 8), which is why this is opt-in.
+///  - `payToContainer == false`: pay the current circuit holder (`ownerOf`). That is the seller unless the
+///    circuit NFT has moved, in which case the receivable travels with the circuit to its new holder.
+///    If `ownerOf` reverts or returns zero (burned circuit), pay the original seller.
 ///
-/// Accounting invariant: `totalHeld` equals the sum of `totalAmount` over invoices in Funded or
-/// Submitted, and `token.balanceOf(this) >= totalHeld` (equality unless someone sends tokens
-/// directly to the contract, which are then stuck: there is no sweep function by design).
-/// @custom:security-contact see docs/HANDOFF.md
+/// Trust model: the owner can change `feeRecipient` and nothing else. Only the buyer funds, releases and
+/// claims the time-lock refund; only the seller submits; the optional arbiter (proposed by the seller,
+/// accepted by the buyer at funding) can release or refund a submitted milestone; only seller and buyer
+/// cancel. The arbiter takes no fee. No sweep function.
+///
+/// Accounting invariant: `totalHeld` equals the sum of unresolved milestone amounts over Funded invoices,
+/// and `token.balanceOf(this) >= totalHeld`.
 contract BullaEscrow is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
@@ -32,48 +56,81 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     enum State {
         None, //       0: invoice does not exist
         Draft, //      1: created by seller, waiting for buyer funds
-        Funded, //     2: buyer deposited totalAmount
-        Submitted, //  3: seller submitted a delivery hash / URI
-        Released, //   4: buyer released, seller paid (minus fee)
-        Refunded, //   5: due time passed, buyer reclaimed funds
-        Cancelled //   6: both parties consented, buyer refunded if funded
+        Funded, //     2: buyer deposited the full amount; milestones in progress
+        Completed, //  3: every milestone resolved by release (or arbiter refund)
+        Refunded, //   4: due time passed; buyer reclaimed every unresolved milestone
+        Cancelled //   5: both parties consented; unresolved remainder refunded if funded
     }
 
-    /// @notice One milestone invoice.
-    /// @param id Sequential id, starting at 1.
-    /// @param seller Creator; receives the release; the only one who can submit.
-    /// @param buyer The only one who can fund, release, and refund.
-    /// @param token Escrow token (always equals `token()`).
-    /// @param totalAmount Amount in token base units.
-    /// @param deliveryHash Optional pre-agreed hash at creation; the delivery hash after submit.
-    /// @param deliveryURI Optional link to the delivery, set on submit.
-    /// @param dueTimestamp Funding and submitting stop here; refunds open here.
-    /// @param createdAt Creation time.
-    /// @param fundedAt Funding time (0 if never funded).
-    /// @param submittedAt Latest submission time (0 if none).
-    /// @param closedAt Release, refund, or cancel time (0 while open).
-    /// @param state Current state.
-    /// @param circuitContainerId TapeOut container binding (non-zero).
-    /// @param sellerCancelConsent Seller asked to cancel.
-    /// @param buyerCancelConsent Buyer asked to cancel.
-    /// @param memo Short description shown on the public receipt.
+    /// @notice Milestone lifecycle.
+    enum MilestoneState {
+        Pending, //   0: funded or not, awaiting delivery
+        Submitted, // 1: seller recorded a delivery
+        Released, //  2: paid out (minus fee)
+        Refunded //   3: returned to the buyer (time-lock, cancel, or arbiter)
+    }
+
+    /// @notice One milestone of an invoice.
+    struct Milestone {
+        uint256 amount;
+        MilestoneState state;
+        bytes32 deliveryHash;
+        string deliveryURI;
+        string label;
+        uint64 submittedAt;
+        uint64 closedAt;
+        address paidTo;
+    }
+
+    /// @notice One invoice. Milestones are read with `getMilestones`.
     struct Invoice {
         uint256 id;
         address seller;
         address buyer;
         address token;
+        address arbiter;
+        address processor;
+        uint256 circuitId;
+        address container;
+        bool payToContainer;
         uint256 totalAmount;
-        bytes32 deliveryHash;
-        string deliveryURI;
+        uint256 releasedAmount;
+        uint256 refundedAmount;
+        uint8 milestoneCount;
         uint64 dueTimestamp;
         uint64 createdAt;
         uint64 fundedAt;
-        uint64 submittedAt;
         uint64 closedAt;
         State state;
-        bytes32 circuitContainerId;
         bool sellerCancelConsent;
         bool buyerCancelConsent;
+        bytes32 termsHash;
+        string memo;
+    }
+
+    /// @notice Arguments for `createInvoice` (a struct keeps the call readable and the stack shallow).
+    /// @param buyer The only address allowed to fund, release and claim the time-lock refund.
+    /// @param token Must equal `token()`.
+    /// @param amounts Milestone amounts (1 to 10, each > 0).
+    /// @param labels Milestone labels (same length as `amounts`, each at most 80 bytes).
+    /// @param dueTimestamp Funding and submitting stop here; the time-lock refund opens here.
+    /// @param processor TapeOut processor (circuit NFT contract) holding the seller's circuit.
+    /// @param circuitId The seller's circuit #ID on that processor.
+    /// @param payToContainer True: releases pay the circuit's container. False: the circuit holder.
+    /// @param arbiter Optional arbiter (zero for none); may not be the buyer or the seller.
+    /// @param termsHash Optional hash of the agreed scope.
+    /// @param memo Short description shown on the public receipt.
+    struct CreateParams {
+        address buyer;
+        address token;
+        uint256[] amounts;
+        string[] labels;
+        uint64 dueTimestamp;
+        address processor;
+        uint256 circuitId;
+        bool payToContainer;
+        address arbiter;
+        bytes32 termsHash;
         string memo;
     }
 
@@ -81,45 +138,54 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     uint16 public constant MAX_FEE_BPS = 1000;
     /// @notice Basis-point denominator.
     uint16 public constant BPS_DENOMINATOR = 10_000;
+    /// @notice Most milestones per invoice.
+    uint8 public constant MAX_MILESTONES = 10;
+    /// @notice Longest milestone label, in bytes.
+    uint256 public constant MAX_LABEL_BYTES = 80;
 
-    /// @notice The only ERC-20 this escrow accepts. Set once in the constructor.
+    /// @notice The only ERC-20 this escrow accepts.
     IERC20 public immutable token;
-    /// @notice Fee in basis points, skimmed only on a successful release.
+    /// @notice TapeOut container opener (X Layer mainnet: 0x536adD8F30f03b69f6fbF29d425A816A0dC50106).
+    ITapeOutOpener public immutable opener;
+    /// @notice TapeOut processor factory (X Layer mainnet: 0x1f09DAeFA827f02CBb40967cc91b259763760761).
+    ITapeOutFactory public immutable factory;
+    /// @notice Fee in basis points, skimmed from each successful milestone release.
     uint16 public immutable feeBps;
-    /// @notice Receives the release fee. Changeable by the owner.
+    /// @notice Receives release fees. Changeable by the owner.
     address public feeRecipient;
     /// @notice Number of invoices created; also the latest id.
     uint256 public invoiceCount;
-    /// @notice Sum of `totalAmount` over invoices currently Funded or Submitted.
+    /// @notice Sum of unresolved milestone amounts over Funded invoices.
     uint256 public totalHeld;
 
     mapping(uint256 => Invoice) private _invoices;
+    mapping(uint256 => mapping(uint256 => Milestone)) private _milestones;
 
     /// @notice Emitted once at deployment with the immutable configuration.
-    event EscrowConfigured(address indexed token, address indexed feeRecipient, uint16 feeBps, address indexed owner);
+    event EscrowConfigured(address indexed token, address indexed opener, address indexed factory, address feeRecipient, uint16 feeBps, address owner);
     /// @notice A seller created an invoice (state Draft).
-    event InvoiceCreated(
-        uint256 indexed id,
-        address indexed seller,
-        address indexed buyer,
-        address token,
-        uint256 totalAmount,
-        uint64 dueTimestamp,
-        bytes32 circuitContainerId,
-        bytes32 deliveryHash,
-        string memo
-    );
-    /// @notice The buyer deposited `amount` (state Funded).
-    event InvoiceFunded(uint256 indexed id, address indexed buyer, uint256 amount);
-    /// @notice The seller recorded a delivery (state Submitted). May repeat to update it.
-    event DeliverySubmitted(uint256 indexed id, address indexed seller, bytes32 deliveryHash, string deliveryURI);
-    /// @notice The buyer released; the seller received `netToSeller` (state Released).
-    event FundsReleased(uint256 indexed id, address indexed seller, uint256 netToSeller, uint256 fee);
-    /// @notice The release fee was paid. Only emitted when `fee > 0`.
-    event FeePaid(uint256 indexed id, address indexed feeRecipient, uint256 fee);
-    /// @notice The buyer reclaimed `amount` after the due date (state Refunded).
+    event InvoiceCreated(uint256 indexed id, address indexed seller, address indexed buyer, address token, uint256 totalAmount, uint8 milestoneCount, uint64 dueTimestamp, bytes32 termsHash, string memo);
+    /// @notice The invoice is bound to a TapeOut circuit and its container.
+    event CircuitBound(uint256 indexed id, address indexed processor, uint256 indexed circuitId, address container, bool payToContainer);
+    /// @notice One milestone definition.
+    event MilestoneDefined(uint256 indexed id, uint256 indexed index, uint256 amount, string label);
+    /// @notice The seller proposed an arbiter (zero = none).
+    event ArbiterProposed(uint256 indexed id, address indexed arbiter);
+    /// @notice The buyer funded the full amount and accepted `arbiter` (state Funded).
+    event InvoiceFunded(uint256 indexed id, address indexed buyer, uint256 amount, address arbiter);
+    /// @notice The seller recorded a delivery for a milestone. May repeat to update it.
+    event MilestoneSubmitted(uint256 indexed id, uint256 indexed index, bytes32 deliveryHash, string deliveryURI);
+    /// @notice A milestone was paid out to `paidTo` (container or circuit holder), net of `fee`.
+    event MilestoneReleased(uint256 indexed id, uint256 indexed index, address indexed paidTo, uint256 net, uint256 fee, address by);
+    /// @notice A release fee was paid. Only emitted when `fee > 0`.
+    event FeePaid(uint256 indexed id, uint256 indexed index, address indexed feeRecipient, uint256 fee);
+    /// @notice A milestone was returned to the buyer.
+    event MilestoneRefunded(uint256 indexed id, uint256 indexed index, uint256 amount, address by);
+    /// @notice Every milestone is resolved (state Completed).
+    event InvoiceCompleted(uint256 indexed id, uint256 releasedAmount, uint256 refundedAmount);
+    /// @notice After the due date the buyer reclaimed `amount` of unresolved milestones (state Refunded).
     event Refunded(uint256 indexed id, address indexed buyer, uint256 amount);
-    /// @notice `party` consented to cancel. Cancels when both parties have.
+    /// @notice `party` consented to cancel.
     event CancelConsentGiven(uint256 indexed id, address indexed party);
     /// @notice Both parties consented; `refundedToBuyer` was returned (state Cancelled).
     event InvoiceCancelled(uint256 indexed id, uint256 refundedToBuyer);
@@ -132,28 +198,44 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     error FeeTooHigh(uint16 feeBps);
     /// @notice `createInvoice` was given a token other than `token()`.
     error UnsupportedToken(address token);
-    /// @notice Invoice amount was zero.
+    /// @notice A milestone amount was zero.
     error InvalidAmount();
     /// @notice The escrow received less than requested (fee-on-transfer or rebasing token).
     error TransferShortfall(uint256 expected, uint256 received);
     /// @notice Buyer was zero or equal to the seller.
     error InvalidBuyer();
+    /// @notice Arbiter was the buyer or the seller.
+    error InvalidArbiter();
     /// @notice Due timestamp not in the future.
     error DueInPast();
-    /// @notice `circuitContainerId` was zero.
-    error MissingContainerId();
+    /// @notice Milestone count outside 1..10 or labels length mismatch.
+    error InvalidMilestones();
+    /// @notice A milestone label is longer than `MAX_LABEL_BYTES`.
+    error LabelTooLong(uint256 index);
+    /// @notice The processor is not a TapeOut processor (`factory.isCPU` returned false).
+    error NotTapeOutProcessor(address processor);
+    /// @notice The caller does not hold the circuit.
+    error NotCircuitHolder(address processor, uint256 circuitId, address holder);
     /// @notice Submitted delivery hash was zero.
     error MissingDeliveryHash();
     /// @notice No invoice with this id.
     error InvoiceNotFound(uint256 id);
+    /// @notice No milestone with this index.
+    error MilestoneNotFound(uint256 id, uint256 index);
     /// @notice Caller is not the invoice's seller.
     error NotSeller();
     /// @notice Caller is not the invoice's buyer.
     error NotBuyer();
+    /// @notice Caller is not the invoice's arbiter.
+    error NotArbiter();
     /// @notice Caller is neither seller nor buyer.
     error NotParty();
-    /// @notice The action is not allowed in the invoice's current state.
+    /// @notice The buyer funded with a different arbiter than the one proposed.
+    error ArbiterMismatch(address proposed, address accepted);
+    /// @notice The invoice is not in a state that allows this action.
     error WrongState(State current);
+    /// @notice The milestone is not in a state that allows this action.
+    error WrongMilestoneState(MilestoneState current);
     /// @notice The due date has passed (fund / submit).
     error PastDue();
     /// @notice The refund time-lock has not passed yet.
@@ -161,94 +243,113 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     /// @notice This party already consented to cancel.
     error AlreadyConsented();
 
-    /// @param token_ The escrow ERC-20 (e.g. USDC on X Layer). Immutable.
+    /// @param token_ The escrow ERC-20 (USDC on X Layer mainnet). Immutable.
+    /// @param opener_ TapeOut container opener. Immutable.
+    /// @param factory_ TapeOut processor factory. Immutable.
     /// @param feeRecipient_ Initial fee recipient.
     /// @param feeBps_ Fee in basis points, at most `MAX_FEE_BPS`. Immutable.
     /// @param initialOwner Owner, whose only power is `setFeeRecipient`.
-    constructor(address token_, address feeRecipient_, uint16 feeBps_, address initialOwner) Ownable(initialOwner) {
-        if (token_ == address(0) || feeRecipient_ == address(0)) revert ZeroAddress();
+    constructor(address token_, address opener_, address factory_, address feeRecipient_, uint16 feeBps_, address initialOwner) Ownable(initialOwner) {
+        if (token_ == address(0) || opener_ == address(0) || factory_ == address(0) || feeRecipient_ == address(0)) revert ZeroAddress();
         if (feeBps_ > MAX_FEE_BPS) revert FeeTooHigh(feeBps_);
         token = IERC20(token_);
+        opener = ITapeOutOpener(opener_);
+        factory = ITapeOutFactory(factory_);
         feeRecipient = feeRecipient_;
         feeBps = feeBps_;
-        emit EscrowConfigured(token_, feeRecipient_, feeBps_, initialOwner);
+        emit EscrowConfigured(token_, opener_, factory_, feeRecipient_, feeBps_, initialOwner);
     }
 
     // ------------------------------------------------------------------
-    // Seller actions
+    // Seller
     // ------------------------------------------------------------------
 
-    /// @notice Seller creates an invoice in Draft.
-    /// @param buyer The only address allowed to fund, release, and claim a refund.
-    /// @param token_ Must equal `token()`; passed explicitly so a wrong token fails loudly.
-    /// @param totalAmount Amount in token base units (> 0).
-    /// @param dueTimestamp After this, a Funded/Submitted invoice can be refunded to the buyer.
-    /// @param deliveryHash Optional pre-agreed hash (e.g. of the scope). Overwritten on submit.
-    /// @param circuitContainerId TapeOut container binding (non-zero).
-    /// @param memo Short human-readable description shown on the receipt.
+    /// @notice Seller creates a milestone invoice bound to a TapeOut circuit they hold (state Draft).
+    /// @param p See `CreateParams`.
     /// @return id The new invoice id.
-    function createInvoice(
-        address buyer,
-        address token_,
-        uint256 totalAmount,
-        uint64 dueTimestamp,
-        bytes32 deliveryHash,
-        bytes32 circuitContainerId,
-        string calldata memo
-    ) external returns (uint256 id) {
-        if (token_ != address(token)) revert UnsupportedToken(token_);
-        if (buyer == address(0) || buyer == msg.sender) revert InvalidBuyer();
-        if (totalAmount == 0) revert InvalidAmount();
-        if (dueTimestamp <= block.timestamp) revert DueInPast();
-        if (circuitContainerId == bytes32(0)) revert MissingContainerId();
+    function createInvoice(CreateParams calldata p) external returns (uint256 id) {
+        if (p.token != address(token)) revert UnsupportedToken(p.token);
+        if (p.buyer == address(0) || p.buyer == msg.sender) revert InvalidBuyer();
+        if (p.arbiter != address(0) && (p.arbiter == msg.sender || p.arbiter == p.buyer)) revert InvalidArbiter();
+        if (p.dueTimestamp <= block.timestamp) revert DueInPast();
+        uint256 n = p.amounts.length;
+        if (n == 0 || n > MAX_MILESTONES || p.labels.length != n) revert InvalidMilestones();
+        if (!factory.isCPU(p.processor)) revert NotTapeOutProcessor(p.processor);
+        address holder = ITapeOutProcessor(p.processor).ownerOf(p.circuitId);
+        if (holder != msg.sender) revert NotCircuitHolder(p.processor, p.circuitId, holder);
+        address container = opener.accountOf(p.processor, p.circuitId);
+        if (container == address(0)) revert ZeroAddress();
 
         id = ++invoiceCount;
+        uint256 total = 0;
+        for (uint256 i = 0; i < n; ++i) {
+            uint256 a = p.amounts[i];
+            if (a == 0) revert InvalidAmount();
+            if (bytes(p.labels[i]).length > MAX_LABEL_BYTES) revert LabelTooLong(i);
+            total += a;
+            Milestone storage m = _milestones[id][i];
+            m.amount = a;
+            m.label = p.labels[i];
+            emit MilestoneDefined(id, i, a, p.labels[i]);
+        }
+
         Invoice storage inv = _invoices[id];
         inv.id = id;
         inv.seller = msg.sender;
-        inv.buyer = buyer;
-        inv.token = token_;
-        inv.totalAmount = totalAmount;
-        inv.deliveryHash = deliveryHash;
-        inv.dueTimestamp = dueTimestamp;
+        inv.buyer = p.buyer;
+        inv.token = p.token;
+        inv.arbiter = p.arbiter;
+        inv.processor = p.processor;
+        inv.circuitId = p.circuitId;
+        inv.container = container;
+        inv.payToContainer = p.payToContainer;
+        inv.totalAmount = total;
+        inv.milestoneCount = uint8(n);
+        inv.dueTimestamp = p.dueTimestamp;
         inv.createdAt = uint64(block.timestamp);
         inv.state = State.Draft;
-        inv.circuitContainerId = circuitContainerId;
-        inv.memo = memo;
+        inv.termsHash = p.termsHash;
+        inv.memo = p.memo;
 
-        emit InvoiceCreated(id, msg.sender, buyer, token_, totalAmount, dueTimestamp, circuitContainerId, deliveryHash, memo);
+        emit InvoiceCreated(id, msg.sender, p.buyer, p.token, total, uint8(n), p.dueTimestamp, p.termsHash, p.memo);
+        emit CircuitBound(id, p.processor, p.circuitId, container, p.payToContainer);
+        emit ArbiterProposed(id, p.arbiter);
     }
 
-    /// @notice Seller records the delivery. Allowed while Funded, or again while Submitted (update).
+    /// @notice Seller records the delivery for one milestone (Pending or Submitted, before the due date).
     /// @param id Invoice id.
+    /// @param index Milestone index.
     /// @param deliveryHash Non-zero hash of the delivered work.
     /// @param deliveryURI Optional link (ipfs://, https://, tape://).
-    function submitDelivery(uint256 id, bytes32 deliveryHash, string calldata deliveryURI) external {
+    function submitMilestone(uint256 id, uint256 index, bytes32 deliveryHash, string calldata deliveryURI) external {
         Invoice storage inv = _get(id);
         if (msg.sender != inv.seller) revert NotSeller();
-        if (inv.state != State.Funded && inv.state != State.Submitted) revert WrongState(inv.state);
+        if (inv.state != State.Funded) revert WrongState(inv.state);
         if (block.timestamp >= inv.dueTimestamp) revert PastDue();
         if (deliveryHash == bytes32(0)) revert MissingDeliveryHash();
+        Milestone storage m = _milestone(inv, index);
+        if (m.state != MilestoneState.Pending && m.state != MilestoneState.Submitted) revert WrongMilestoneState(m.state);
 
-        inv.deliveryHash = deliveryHash;
-        inv.deliveryURI = deliveryURI;
-        inv.submittedAt = uint64(block.timestamp);
-        inv.state = State.Submitted;
-
-        emit DeliverySubmitted(id, msg.sender, deliveryHash, deliveryURI);
+        m.deliveryHash = deliveryHash;
+        m.deliveryURI = deliveryURI;
+        m.submittedAt = uint64(block.timestamp);
+        m.state = MilestoneState.Submitted;
+        emit MilestoneSubmitted(id, index, deliveryHash, deliveryURI);
     }
 
     // ------------------------------------------------------------------
-    // Buyer actions
+    // Buyer
     // ------------------------------------------------------------------
 
-    /// @notice Buyer deposits `totalAmount` of `token`. Requires a prior `approve` to this contract.
-    /// @param id Invoice id (must be Draft and not past due).
-    function fundInvoice(uint256 id) external nonReentrant {
+    /// @notice Buyer deposits the full invoice amount and accepts the proposed arbiter. Requires `approve`.
+    /// @param id Invoice id (Draft, before the due date).
+    /// @param acceptedArbiter Must equal the proposed arbiter (zero if none): explicit acceptance.
+    function fundInvoice(uint256 id, address acceptedArbiter) external nonReentrant {
         Invoice storage inv = _get(id);
         if (msg.sender != inv.buyer) revert NotBuyer();
         if (inv.state != State.Draft) revert WrongState(inv.state);
         if (block.timestamp >= inv.dueTimestamp) revert PastDue();
+        if (acceptedArbiter != inv.arbiter) revert ArbiterMismatch(inv.arbiter, acceptedArbiter);
 
         uint256 amount = inv.totalAmount;
         inv.state = State.Funded;
@@ -260,59 +361,83 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         uint256 received = token.balanceOf(address(this)) - beforeBal;
         if (received != amount) revert TransferShortfall(amount, received);
 
-        emit InvoiceFunded(id, msg.sender, amount);
+        emit InvoiceFunded(id, msg.sender, amount, inv.arbiter);
     }
 
-    /// @notice Buyer releases escrow to the seller, minus the fee. Allowed while Funded or Submitted.
-    /// @param id Invoice id.
-    function releaseFunds(uint256 id) external nonReentrant {
+    /// @notice Buyer releases one milestone (Pending or Submitted) to the payout target, minus the fee.
+    /// @param id Invoice id (Funded).
+    /// @param index Milestone index.
+    function releaseMilestone(uint256 id, uint256 index) external nonReentrant {
         Invoice storage inv = _get(id);
         if (msg.sender != inv.buyer) revert NotBuyer();
-        if (inv.state != State.Funded && inv.state != State.Submitted) revert WrongState(inv.state);
-
-        uint256 amount = inv.totalAmount;
-        (uint256 fee, uint256 net) = quoteRelease(amount);
-        inv.state = State.Released;
-        inv.closedAt = uint64(block.timestamp);
-        totalHeld -= amount;
-        address recipient = feeRecipient;
-
-        token.safeTransfer(inv.seller, net);
-        if (fee > 0) {
-            token.safeTransfer(recipient, fee);
-            emit FeePaid(id, recipient, fee);
-        }
-        emit FundsReleased(id, inv.seller, net, fee);
+        if (inv.state != State.Funded) revert WrongState(inv.state);
+        Milestone storage m = _milestone(inv, index);
+        if (m.state != MilestoneState.Pending && m.state != MilestoneState.Submitted) revert WrongMilestoneState(m.state);
+        _release(inv, m, index);
     }
 
-    /// @notice After `dueTimestamp`, the buyer reclaims the full amount if not yet released.
-    /// @param id Invoice id (Funded or Submitted).
+    /// @notice After `dueTimestamp`, the buyer reclaims every unresolved milestone (state Refunded).
+    /// @param id Invoice id (Funded).
     function claimRefund(uint256 id) external nonReentrant {
         Invoice storage inv = _get(id);
         if (msg.sender != inv.buyer) revert NotBuyer();
-        if (inv.state != State.Funded && inv.state != State.Submitted) revert WrongState(inv.state);
+        if (inv.state != State.Funded) revert WrongState(inv.state);
         if (block.timestamp < inv.dueTimestamp) revert NotYetDue(inv.dueTimestamp);
 
-        uint256 amount = inv.totalAmount;
+        uint256 amount = _refundUnresolved(inv);
         inv.state = State.Refunded;
         inv.closedAt = uint64(block.timestamp);
-        totalHeld -= amount;
-        token.safeTransfer(inv.buyer, amount);
-
+        if (amount > 0) token.safeTransfer(inv.buyer, amount);
         emit Refunded(id, inv.buyer, amount);
+    }
+
+    // ------------------------------------------------------------------
+    // Arbiter
+    // ------------------------------------------------------------------
+
+    /// @notice Arbiter releases a submitted milestone to the payout target (fee applies; no arbiter fee).
+    /// @param id Invoice id (Funded).
+    /// @param index Milestone index (Submitted).
+    function arbiterRelease(uint256 id, uint256 index) external nonReentrant {
+        Invoice storage inv = _get(id);
+        if (inv.arbiter == address(0) || msg.sender != inv.arbiter) revert NotArbiter();
+        if (inv.state != State.Funded) revert WrongState(inv.state);
+        Milestone storage m = _milestone(inv, index);
+        if (m.state != MilestoneState.Submitted) revert WrongMilestoneState(m.state);
+        _release(inv, m, index);
+    }
+
+    /// @notice Arbiter refunds a submitted milestone to the buyer (no fee).
+    /// @param id Invoice id (Funded).
+    /// @param index Milestone index (Submitted).
+    function arbiterRefund(uint256 id, uint256 index) external nonReentrant {
+        Invoice storage inv = _get(id);
+        if (inv.arbiter == address(0) || msg.sender != inv.arbiter) revert NotArbiter();
+        if (inv.state != State.Funded) revert WrongState(inv.state);
+        Milestone storage m = _milestone(inv, index);
+        if (m.state != MilestoneState.Submitted) revert WrongMilestoneState(m.state);
+
+        uint256 amount = m.amount;
+        m.state = MilestoneState.Refunded;
+        m.closedAt = uint64(block.timestamp);
+        inv.refundedAmount += amount;
+        totalHeld -= amount;
+        _maybeComplete(inv);
+        token.safeTransfer(inv.buyer, amount);
+        emit MilestoneRefunded(id, index, amount, msg.sender);
     }
 
     // ------------------------------------------------------------------
     // Either party
     // ------------------------------------------------------------------
 
-    /// @notice Record this party's consent to cancel. When both seller and buyer have consented,
-    /// the invoice is Cancelled and any held funds go back to the buyer (no fee).
-    /// @param id Invoice id (Draft, Funded, or Submitted).
+    /// @notice Record this party's consent to cancel. With both consents the invoice is Cancelled and any
+    /// unresolved remainder goes back to the buyer (no fee). Released milestones stay paid.
+    /// @param id Invoice id (Draft or Funded).
     function mutualCancel(uint256 id) external nonReentrant {
         Invoice storage inv = _get(id);
         State s = inv.state;
-        if (s != State.Draft && s != State.Funded && s != State.Submitted) revert WrongState(s);
+        if (s != State.Draft && s != State.Funded) revert WrongState(s);
 
         if (msg.sender == inv.seller) {
             if (inv.sellerCancelConsent) revert AlreadyConsented();
@@ -326,13 +451,10 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         emit CancelConsentGiven(id, msg.sender);
 
         if (inv.sellerCancelConsent && inv.buyerCancelConsent) {
-            uint256 refund = s == State.Draft ? 0 : inv.totalAmount;
+            uint256 refund = s == State.Funded ? _refundUnresolved(inv) : 0;
             inv.state = State.Cancelled;
             inv.closedAt = uint64(block.timestamp);
-            if (refund > 0) {
-                totalHeld -= refund;
-                token.safeTransfer(inv.buyer, refund);
-            }
+            if (refund > 0) token.safeTransfer(inv.buyer, refund);
             emit InvoiceCancelled(id, refund);
         }
     }
@@ -353,24 +475,94 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     // Views
     // ------------------------------------------------------------------
 
-    /// @notice Full invoice record.
-    /// @param id Invoice id.
-    /// @return The invoice. Reverts with `InvoiceNotFound` for unknown ids.
+    /// @notice Full invoice record. Reverts with `InvoiceNotFound` for unknown ids.
     function getInvoice(uint256 id) external view returns (Invoice memory) {
         return _get(id);
     }
 
-    /// @notice Fee split for an amount: `fee = amount * feeBps / 10000` (rounded down), `net = amount - fee`.
-    /// @dev Uses `Math.mulDiv`, so it cannot overflow for any uint256 amount; `fee <= amount * feeBps / 10000` always.
-    /// @param amount Amount in token base units.
-    /// @return fee Amount to the fee recipient.
-    /// @return net Amount to the seller.
+    /// @notice All milestones of an invoice, in order.
+    function getMilestones(uint256 id) external view returns (Milestone[] memory ms) {
+        Invoice storage inv = _get(id);
+        ms = new Milestone[](inv.milestoneCount);
+        for (uint256 i = 0; i < inv.milestoneCount; ++i) ms[i] = _milestones[id][i];
+    }
+
+    /// @notice Where the next release of this invoice would be paid (see the payout rule above).
+    function payoutTarget(uint256 id) external view returns (address) {
+        return _payee(_get(id));
+    }
+
+    /// @notice Fee split: `fee = amount * feeBps / 10000` (rounded down via `Math.mulDiv`), `net = amount - fee`.
     function quoteRelease(uint256 amount) public view returns (uint256 fee, uint256 net) {
         fee = Math.mulDiv(amount, feeBps, BPS_DENOMINATOR);
         net = amount - fee;
     }
 
-    /// @dev Ids are sequential from 1, so existence is a range check (no enum equality; see docs/slither.md).
+    // ------------------------------------------------------------------
+    // Internal
+    // ------------------------------------------------------------------
+
+    function _release(Invoice storage inv, Milestone storage m, uint256 index) private {
+        uint256 amount = m.amount;
+        (uint256 fee, uint256 net) = quoteRelease(amount);
+        address to = _payee(inv);
+        m.state = MilestoneState.Released;
+        m.closedAt = uint64(block.timestamp);
+        m.paidTo = to;
+        inv.releasedAmount += amount;
+        totalHeld -= amount;
+        _maybeComplete(inv);
+        address recipient = feeRecipient;
+
+        token.safeTransfer(to, net);
+        if (fee > 0) {
+            token.safeTransfer(recipient, fee);
+            emit FeePaid(inv.id, index, recipient, fee);
+        }
+        emit MilestoneReleased(inv.id, index, to, net, fee, msg.sender);
+    }
+
+    /// @dev Payout target. Container when opted in; otherwise the live circuit holder, falling back to the
+    /// seller if the processor reverts or reports no holder.
+    function _payee(Invoice storage inv) private view returns (address) {
+        if (inv.payToContainer) return inv.container;
+        try ITapeOutProcessor(inv.processor).ownerOf(inv.circuitId) returns (address holder) {
+            return holder == address(0) ? inv.seller : holder;
+        } catch {
+            return inv.seller;
+        }
+    }
+
+    /// @dev Marks every Pending/Submitted milestone Refunded; returns the total. Caller sets the state.
+    function _refundUnresolved(Invoice storage inv) private returns (uint256 amount) {
+        uint256 id = inv.id;
+        for (uint256 i = 0; i < inv.milestoneCount; ++i) {
+            Milestone storage m = _milestones[id][i];
+            if (m.state == MilestoneState.Pending || m.state == MilestoneState.Submitted) {
+                m.state = MilestoneState.Refunded;
+                m.closedAt = uint64(block.timestamp);
+                amount += m.amount;
+                emit MilestoneRefunded(id, i, m.amount, msg.sender);
+            }
+        }
+        inv.refundedAmount += amount;
+        totalHeld -= amount;
+    }
+
+    function _maybeComplete(Invoice storage inv) private {
+        if (inv.releasedAmount + inv.refundedAmount == inv.totalAmount) {
+            inv.state = State.Completed;
+            inv.closedAt = uint64(block.timestamp);
+            emit InvoiceCompleted(inv.id, inv.releasedAmount, inv.refundedAmount);
+        }
+    }
+
+    function _milestone(Invoice storage inv, uint256 index) private view returns (Milestone storage) {
+        if (index >= inv.milestoneCount) revert MilestoneNotFound(inv.id, index);
+        return _milestones[inv.id][index];
+    }
+
+    /// @dev Ids are sequential from 1, so existence is a range check.
     function _get(uint256 id) private view returns (Invoice storage inv) {
         if (id == 0 || id > invoiceCount) revert InvoiceNotFound(id);
         inv = _invoices[id];

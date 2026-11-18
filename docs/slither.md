@@ -55,3 +55,17 @@ Same tool version (`slither-analyzer` 0.11.6) and the same command, against the 
 Change made for the medium finding: although the `incorrect-equality` hit on `getInvoice` was a false positive (enum, not a balance), the existence check no longer compares the enum. Invoice ids are sequential from 1, so `_get` now reverts with `InvoiceNotFound(id)` when `id == 0 || id > invoiceCount`, and `getInvoice` reuses `_get`. Behavior is identical (covered by the existing `InvoiceNotFound` tests and the fuzz walks, which also hit unknown ids).
 
 Result: **0 high, 0 medium, 4 low, 0 informational** (24 contracts analyzed with 102 detectors). The 4 lows are the intended `block.timestamp` due-date comparisons in `createInvoice`, `submitDelivery`, `fundInvoice`, and `claimRefund` described above. The previous mis-tagged `getInvoice` timestamp entry is gone.
+
+## v2 run (18 Nov 2026, Claude Code build sandbox): circuit-bound milestone escrow
+
+Same tool (`slither-analyzer` 0.11.6) and command, against BullaEscrow v2 (circuit binding through the TapeOut processor, opener and factory; per-invoice payout target; 1 to 10 milestones; optional arbiter).
+
+First pass: **0 high, 1 medium, 4 low, 1 informational**.
+
+- **Medium, `uninitialized-local`:** `createInvoice` declared `uint256 total;` before summing milestone amounts. Solidity zero-initializes locals, so the value was always correct, but the declaration is now explicit (`uint256 total = 0;`), and loop counters were made explicit too. Behavior unchanged (55 tests pass).
+- **Low, `timestamp` (4):** `createInvoice` (due date in the future), `submitMilestone` and `fundInvoice` (not after the due date), `claimRefund` (time-lock open). These are the intended time-lock rules, measured in days. Left as-is.
+- **Informational, `cyclomatic-complexity`:** `createInvoice` scores 12 because it validates the buyer, arbiter, due date, milestone count, labels, amounts, TapeOut processor and circuit holder in one place. Left as-is; every branch is covered by tests.
+
+Re-run after the fix: **0 high, 0 medium, 4 low, 1 informational** (32 contracts analyzed with 102 detectors).
+
+External calls added in v2 are all `view` reads of TapeOut contracts (`factory.isCPU`, `processor.ownerOf`, `opener.accountOf`), compiled as `staticcall`, inside `nonReentrant` functions where funds move. A reverting `ownerOf` at release time cannot trap funds: the payout falls back to the original seller (tested). Not an audit.
