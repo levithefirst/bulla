@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { erc20Abi, type Address, type Hex } from "viem";
+import { erc20Abi, parseAbi, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { config } from "../config";
 import { client } from "./client";
@@ -52,7 +52,7 @@ export type Milestone = {
   paidTo: Address;
 };
 
-export type InvoiceData = { invoice: Invoice; milestones: Milestone[]; payoutTarget: Address };
+export type InvoiceData = { invoice: Invoice; milestones: Milestone[]; payoutTarget: Address; containerOpened: boolean };
 
 export const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
 export const milestoneStateName = (s: number): MilestoneStateName => MILESTONE_STATES[s] ?? "Pending";
@@ -132,12 +132,13 @@ export function useInvoice(id: bigint | null) {
         return d;
       }
       const address = requireEscrow(t);
-      const [invoice, milestones, payoutTarget] = await Promise.all([
+      const [invoice, milestones, payoutTarget, containerOpened] = await Promise.all([
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] }),
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id!] }),
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "payoutTarget", args: [id!] }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "containerOpened", args: [id!] }),
       ]);
-      return { invoice: invoice as unknown as Invoice, milestones: milestones as unknown as Milestone[], payoutTarget };
+      return { invoice: invoice as unknown as Invoice, milestones: milestones as unknown as Milestone[], payoutTarget, containerOpened };
     },
     refetchInterval: 10_000,
     retry: (count, err) => !(err instanceof NotConfiguredError) && !String(err).includes("InvoiceNotFound") && count < 1,
@@ -209,8 +210,8 @@ export function quoteFee(amount: bigint, feeBps: number) {
 export type SellerHistory = { invoices: number; releasedMilestones: number; releasedGross: bigint; refundedMilestones: number };
 
 /**
- * Public payment history of a TapeOut circuit on this escrow, computed in the browser from events
- * (CircuitBound + MilestoneReleased + MilestoneRefunded). No backend. Scans from the escrow's deploy block.
+ * Public payment history of a TapeOut circuit on this escrow, from the contract's on-chain `circuitStats`
+ * counters (no event scan: the public X Layer RPC rejects eth_getLogs, docs/research.md section 9).
  */
 export function useSellerHistory(processor?: Address, circuitId?: bigint) {
   const t = useEscrowTarget();
@@ -218,21 +219,27 @@ export function useSellerHistory(processor?: Address, circuitId?: bigint) {
     queryKey: ["sellerHistory", t.address, processor, circuitId?.toString()],
     enabled: !!processor && circuitId !== undefined && !config.mock && !!t.address,
     queryFn: async (): Promise<SellerHistory> => {
-      const logs = await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
-      const ids = new Set<bigint>();
-      for (const l of logs)
-        if (l.eventName === "CircuitBound" && String(l.args.processor).toLowerCase() === processor!.toLowerCase() && l.args.circuitId === circuitId) ids.add(l.args.id as bigint);
-      const h: SellerHistory = { invoices: ids.size, releasedMilestones: 0, releasedGross: 0n, refundedMilestones: 0 };
-      for (const l of logs) {
-        if (!ids.has(l.args.id as bigint)) continue;
-        if (l.eventName === "MilestoneReleased") {
-          h.releasedMilestones++;
-          h.releasedGross += (l.args.net as bigint) + (l.args.fee as bigint);
-        } else if (l.eventName === "MilestoneRefunded") h.refundedMilestones++;
-      }
-      return h;
+      const st = await ethCall(client, { address: t.address!, abi: bullaEscrowAbi, functionName: "circuitStats", args: [processor!, circuitId!] });
+      return { invoices: Number(st.invoices), releasedMilestones: Number(st.releasedMilestones), releasedGross: st.releasedAmount, refundedMilestones: Number(st.refundedMilestones) };
     },
-    staleTime: 30_000,
+    refetchInterval: 15_000,
+    retry: 0,
+  });
+}
+
+/** Container EXEC_FEE() read live (TapeOut account logic; docs/research.md section 9). Null if the container has no such function (e.g. a stand-in). */
+export function useExecFee(container?: Address) {
+  return useQuery({
+    queryKey: ["execFee", container],
+    enabled: !!container && !config.mock,
+    queryFn: async () => {
+      try {
+        return await ethCall(client, { address: container!, abi: parseAbi(["function EXEC_FEE() view returns (uint256)"]), functionName: "EXEC_FEE" });
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 60_000,
     retry: 0,
   });
 }

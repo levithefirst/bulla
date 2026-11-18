@@ -38,14 +38,14 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
   expect(wallMs).toBeLessThan(MAX_MS);
 
   // Every step is a real tx with a link (fresh browser => fresh burners => no skipped steps).
-  for (const key of ["gasFreelancer", "gasClient", "circuit", "mint", "approve", "create", "fund", "submit0", "submit1", "release0", "release1"]) {
+  for (const key of ["gasFreelancer", "gasClient", "circuit", "open", "mint", "approve", "create", "fund", "submit0", "submit1", "release0", "release1"]) {
     const step = page.getByTestId(`step-${key}`);
     await expect(step).toHaveAttribute("data-status", "done");
     await expect(step.getByTestId("step-tx")).toContainText(/0x[0-9a-f]{4}/i);
   }
   if (TESTNET) {
     const hrefs = await page.getByTestId("step-tx").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href));
-    expect(hrefs).toHaveLength(11);
+    expect(hrefs).toHaveLength(12);
     for (const h of hrefs) expect(h).toMatch(/^https:\/\/www\.okx\.com\/web3\/explorer\/xlayer-test\/tx\/0x[0-9a-f]{64}$/);
   }
 

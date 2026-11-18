@@ -461,3 +461,7 @@ legend { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-trans
   .ms-row { grid-template-columns: 26px minmax(0, 1fr) 32px; }
   .ms-row .ms-amount { grid-column: 2 / 3; }
 }
+.withdraw-note { margin: 16px 0 0; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.withdraw-note summary { cursor: pointer; font-weight: 600; }
+.withdraw-note ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; word-break: break-word; }
+.withdraw-note p { margin: 8px 0 0; }

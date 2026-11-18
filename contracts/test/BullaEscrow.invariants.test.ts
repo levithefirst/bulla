@@ -9,9 +9,10 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signer
  *   I1  token.balanceOf(escrow) == totalHeld == sum(unresolved milestone amounts of Funded invoices)
  *   I2  no invoice or milestone state goes backwards; closed states never change
  *   I3  released + refunded <= total; a Completed invoice has released + refunded == total
+ *   I5  circuitStats(processor, id) equals the counts and released volume derived from the invoices
  * Checked on every successful release:
  *   I4  fee == floor(amount * feeBps / 10000), the payout target receives amount - fee, and the target is
- *       the container (payToContainer) or the live circuit holder
+ *       the container (payToContainer and opened) or the live circuit holder
  * Checked on refunds and cancels: the buyer receives exactly the unresolved remainder, no fee.
  */
 const RUNS = Number(process.env.FUZZ_RUNS ?? 6);
@@ -112,6 +113,24 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
             lastMs.set(k, ms2);
           });
         }
+        // I5 on-chain circuit stats match the invoices: released amount and counts per circuit.
+        const agg = new Map<string, { inv: bigint; rel: bigint; relAmt: bigint; ref: bigint }>();
+        for (let id = 1n; id <= n; id++) {
+          const inv = await escrow.getInvoice(id);
+          const k = `${inv.processor}:${inv.circuitId}`;
+          const a = agg.get(k) ?? { inv: 0n, rel: 0n, relAmt: 0n, ref: 0n };
+          a.inv += 1n;
+          for (const m of await escrow.getMilestones(id)) {
+            if (Number(m.state) === 2) (a.rel += 1n), (a.relAmt += m.amount);
+            if (Number(m.state) === 3) a.ref += 1n;
+          }
+          agg.set(k, a);
+        }
+        for (const [k, a] of agg) {
+          const [pr, cid] = k.split(":");
+          const st = await escrow.circuitStats(pr, BigInt(cid));
+          expect([st.invoices, st.releasedMilestones, st.releasedAmount, st.refundedMilestones], `step ${step}: circuit stats for ${k}`).to.deep.equal([a.inv, a.rel, a.relAmt, a.ref]);
+        }
         const held = await escrow.totalHeld();
         expect(held, `step ${step}: totalHeld != unresolved`).to.equal(sum);
         expect(await token.balanceOf(ea), `step ${step}: balance != totalHeld`).to.equal(held);
@@ -137,7 +156,7 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
         const find = (a?: string) => everyone.find((x) => x.address === a);
         const party = (p?: HardhatEthersSigner) => (p && r() < 0.8 ? p : pick(everyone));
         const mi = ms.length ? Math.floor(r() * (ms.length + (r() < 0.1 ? 1 : 0))) : 0;
-        const action = n === 0 ? "create" : pick(["create", "create", "fund", "fund", "submit", "submit", "release", "release", "arbRelease", "arbRefund", "refund", "cancel", "warp", "transfer"] as const);
+        const action = n === 0 ? "create" : pick(["create", "create", "fund", "fund", "submit", "submit", "release", "release", "arbRelease", "arbRefund", "refund", "cancel", "warp", "transfer", "open"] as const);
         const now = (await ethers.provider.getBlock("latest"))!.timestamp;
 
         if (action === "create") {
@@ -169,7 +188,8 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
           const caller = action === "release" ? party(find(inv?.buyer)) : party(find(inv?.arbiter));
           let expected: { target: string; amount: bigint; tb: bigint; fb: bigint } | null = null;
           if (known && mi < ms.length) {
-            const target = inv!.payToContainer ? inv!.container : await proc.ownerOf(inv!.circuitId);
+            const opened = await opener.isOpened(await proc.getAddress(), inv!.circuitId);
+            const target = inv!.payToContainer && opened ? inv!.container : await proc.ownerOf(inv!.circuitId);
             expected = { target, amount: ms[mi].amount, tb: await token.balanceOf(target), fb: await token.balanceOf(feeRecipient.address) };
           }
           const done = await attempt(() => (action === "release" ? escrow.connect(caller).releaseMilestone(id, mi) : escrow.connect(caller).arbiterRelease(id, mi)));
@@ -200,6 +220,8 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
             else if (action === "refund" || (action === "cancel" && st === S.Cancelled && Number(inv!.state) === S.Funded)) expect(delta).to.equal(before.unresolved);
             expect(await token.balanceOf(feeRecipient.address)).to.equal(before.fb);
           }
+        } else if (action === "open") {
+          await attempt(() => opener.open(proc.getAddress(), pick([1, 2])));
         } else if (action === "transfer") {
           const holderId = pick([1, 2]);
           const holder = find(await proc.ownerOf(holderId));

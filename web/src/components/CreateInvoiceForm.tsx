@@ -263,7 +263,8 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
                       {c.container}
                     </span>
                   )}
-                  {c.opened === false && " · not opened yet"}
+                  {" · "}
+                  <span data-testid="container-opened">{c.opened === true ? "opened" : c.opened === false ? "not opened yet" : "opened status unknown"}</span>
                 </span>
               </>
             )}
@@ -274,8 +275,11 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
               <strong>Pay into my TapeOut container</strong>
               <span className="muted small">
                 {" "}
-                Releases go to the circuit's container instead of your wallet, so receivables follow the circuit. Whether a container can send USDC back out is not confirmed yet (docs/research.md §8): only use this if you can
-                withdraw from it.
+                Releases go to the circuit's container instead of your wallet, so receivables follow the circuit. You withdraw with the container's execute call plus a small OKB fee (EXEC_FEE), or in the official
+                TapeOut app.{" "}
+                {c && c.ok && c.opened === false
+                  ? "Your container is not opened yet, so until you open it (0.08 OKB on tapeout.net) releases go to your wallet instead."
+                  : "If the container is not opened at release time, that release goes to your wallet instead."}
               </span>
             </span>
           </label>

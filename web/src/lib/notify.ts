@@ -2,8 +2,9 @@ import type { Address } from "viem";
 
 /**
  * Counterparty notification seam. Today: no channel (no-op). Planned: TapeSend encrypted container-to-container
- * notes, ONLY once the X Layer TapeSend hub is confirmed live (sources conflict; Grok Bot is verifying, see
- * docs/planning/win-audit/WIN-AUDIT.md section 3). Out of scope until then: email, push, any backend.
+ * notes. The TapeSend hub is live on X Layer (proxy 0xe61A9C7213a6Aa616C246a2B569e555B417b25ee, implementation
+ * 0xdCC57797089eBD9f26e686379A4323f353a3F9C6; docs/research.md section 9) but unsealed and unaudited, so it is
+ * out of scope for v2. Also out of scope: email, push, any backend.
  *
  * To add a channel later: implement NotificationChannel and call setNotificationChannel() at startup.
  * Call sites already pass every event the UI produces; a failing channel must never block a payment flow.

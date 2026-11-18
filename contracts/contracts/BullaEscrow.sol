@@ -15,6 +15,7 @@ interface ITapeOutProcessor {
 /// @notice TapeOut container opener. TapeKit SPEC Appendix B.2.
 interface ITapeOutOpener {
     function accountOf(address circuits, uint256 tokenId) external view returns (address);
+    function isOpened(address circuits, uint256 tokenId) external view returns (bool);
 }
 
 /// @notice TapeOut processor factory. TapeKit SPEC Appendix B.1.
@@ -35,12 +36,14 @@ interface ITapeOutFactory {
 /// `opener.accountOf` and stored.
 ///
 /// Payout rule (each release, re-checked live):
-///  - `payToContainer == true`: pay the circuit's container. The container follows the circuit, so whoever
-///    holds the circuit controls the funds. Whether a container can move ERC-20 out is UNKNOWN (see
-///    docs/research.md section 8), which is why this is opt-in.
-///  - `payToContainer == false`: pay the current circuit holder (`ownerOf`). That is the seller unless the
-///    circuit NFT has moved, in which case the receivable travels with the circuit to its new holder.
-///    If `ownerOf` reverts or returns zero (burned circuit), pay the original seller.
+///  - `payToContainer == true` AND the container is opened (`opener.isOpened`): pay the circuit's container.
+///    The container follows the circuit, so whoever holds the circuit controls the funds. An opened X Layer
+///    container moves ERC-20 out with ERC-6551 `execute(to, value, data, 0)` plus `EXEC_FEE()` as msg.value
+///    (docs/research.md section 9). An unopened container reverts `execute` with `NotPaid()`, so while the
+///    container is not opened the release falls back to the rule below.
+///  - otherwise: pay the current circuit holder (`ownerOf`). That is the seller unless the circuit NFT has
+///    moved, in which case the receivable travels with the circuit to its new holder. If `ownerOf` reverts
+///    or returns zero (burned circuit), pay the original seller.
 ///
 /// Trust model: the owner can change `feeRecipient` and nothing else. Only the buyer funds, releases and
 /// claims the time-lock refund; only the seller submits; the optional arbiter (proposed by the seller,
@@ -108,6 +111,14 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         string memo;
     }
 
+    /// @notice Public payment history of one TapeOut circuit on this escrow (no event scan needed).
+    struct CircuitStats {
+        uint64 invoices;
+        uint64 releasedMilestones;
+        uint64 refundedMilestones;
+        uint256 releasedAmount;
+    }
+
     /// @notice Arguments for `createInvoice` (a struct keeps the call readable and the stack shallow).
     /// @param buyer The only address allowed to fund, release and claim the time-lock refund.
     /// @param token Must equal `token()`.
@@ -116,7 +127,8 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     /// @param dueTimestamp Funding and submitting stop here; the time-lock refund opens here.
     /// @param processor TapeOut processor (circuit NFT contract) holding the seller's circuit.
     /// @param circuitId The seller's circuit #ID on that processor.
-    /// @param payToContainer True: releases pay the circuit's container. False: the circuit holder.
+    /// @param payToContainer True: releases pay the circuit's container once it is opened (until then, the
+    /// circuit holder). False: the circuit holder.
     /// @param arbiter Optional arbiter (zero for none); may not be the buyer or the seller.
     /// @param termsHash Optional hash of the agreed scope.
     /// @param memo Short description shown on the public receipt.
@@ -160,6 +172,7 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
 
     mapping(uint256 => Invoice) private _invoices;
     mapping(uint256 => mapping(uint256 => Milestone)) private _milestones;
+    mapping(address => mapping(uint256 => CircuitStats)) private _circuitStats;
 
     /// @notice Emitted once at deployment with the immutable configuration.
     event EscrowConfigured(address indexed token, address indexed opener, address indexed factory, address feeRecipient, uint16 feeBps, address owner);
@@ -310,6 +323,7 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         inv.state = State.Draft;
         inv.termsHash = p.termsHash;
         inv.memo = p.memo;
+        _circuitStats[p.processor][p.circuitId].invoices += 1;
 
         emit InvoiceCreated(id, msg.sender, p.buyer, p.token, total, uint8(n), p.dueTimestamp, p.termsHash, p.memo);
         emit CircuitBound(id, p.processor, p.circuitId, container, p.payToContainer);
@@ -422,6 +436,7 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         m.closedAt = uint64(block.timestamp);
         inv.refundedAmount += amount;
         totalHeld -= amount;
+        _circuitStats[inv.processor][inv.circuitId].refundedMilestones += 1;
         _maybeComplete(inv);
         token.safeTransfer(inv.buyer, amount);
         emit MilestoneRefunded(id, index, amount, msg.sender);
@@ -492,6 +507,17 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         return _payee(_get(id));
     }
 
+    /// @notice Whether this invoice's container is opened right now (false if the opener reverts).
+    function containerOpened(uint256 id) external view returns (bool) {
+        return _containerOpened(_get(id));
+    }
+
+    /// @notice Payment history of a TapeOut circuit on this escrow: invoices billed, milestones released and
+    /// refunded, and gross amount released. Counted on chain, so no log scan is needed.
+    function circuitStats(address processor, uint256 circuitId) external view returns (CircuitStats memory) {
+        return _circuitStats[processor][circuitId];
+    }
+
     /// @notice Fee split: `fee = amount * feeBps / 10000` (rounded down via `Math.mulDiv`), `net = amount - fee`.
     function quoteRelease(uint256 amount) public view returns (uint256 fee, uint256 net) {
         fee = Math.mulDiv(amount, feeBps, BPS_DENOMINATOR);
@@ -511,6 +537,9 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         m.paidTo = to;
         inv.releasedAmount += amount;
         totalHeld -= amount;
+        CircuitStats storage cs = _circuitStats[inv.processor][inv.circuitId];
+        cs.releasedMilestones += 1;
+        cs.releasedAmount += amount;
         _maybeComplete(inv);
         address recipient = feeRecipient;
 
@@ -522,10 +551,10 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         emit MilestoneReleased(inv.id, index, to, net, fee, msg.sender);
     }
 
-    /// @dev Payout target. Container when opted in; otherwise the live circuit holder, falling back to the
-    /// seller if the processor reverts or reports no holder.
+    /// @dev Payout target. The container when opted in and opened; otherwise the live circuit holder, falling
+    /// back to the seller if the processor reverts or reports no holder.
     function _payee(Invoice storage inv) private view returns (address) {
-        if (inv.payToContainer) return inv.container;
+        if (inv.payToContainer && _containerOpened(inv)) return inv.container;
         try ITapeOutProcessor(inv.processor).ownerOf(inv.circuitId) returns (address holder) {
             return holder == address(0) ? inv.seller : holder;
         } catch {
@@ -533,18 +562,30 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         }
     }
 
+    /// @dev True if the opener reports the circuit's container as opened. A reverting opener counts as not opened.
+    function _containerOpened(Invoice storage inv) private view returns (bool) {
+        try opener.isOpened(inv.processor, inv.circuitId) returns (bool opened) {
+            return opened;
+        } catch {
+            return false;
+        }
+    }
+
     /// @dev Marks every Pending/Submitted milestone Refunded; returns the total. Caller sets the state.
     function _refundUnresolved(Invoice storage inv) private returns (uint256 amount) {
         uint256 id = inv.id;
+        uint64 count = 0;
         for (uint256 i = 0; i < inv.milestoneCount; ++i) {
             Milestone storage m = _milestones[id][i];
             if (m.state == MilestoneState.Pending || m.state == MilestoneState.Submitted) {
                 m.state = MilestoneState.Refunded;
                 m.closedAt = uint64(block.timestamp);
                 amount += m.amount;
+                count += 1;
                 emit MilestoneRefunded(id, i, m.amount, msg.sender);
             }
         }
+        _circuitStats[inv.processor][inv.circuitId].refundedMilestones += count;
         inv.refundedAmount += amount;
         totalHeld -= amount;
     }

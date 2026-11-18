@@ -199,7 +199,7 @@ X Layer mainnet (chain 196) addresses, from `kernel/src/config.js` `L2_CONTRACTS
 
 The opener's write function `open(address,uint256)` (payable, `FEE()` = 0.08 OKB on X Layer) is recorded in `docs/planning/mainnet-budget.md`; Bulla never calls it.
 
-### Can a container move ERC-20 out (ERC-6551 `execute`)? UNKNOWN
+### Can a container move ERC-20 out (ERC-6551 `execute`)? UNKNOWN at the time of writing; resolved in section 9 (yes)
 
 - The SPEC lists only `token()` for the container (B.4). It documents no `execute`, `executeCall`, or other call-forwarding function.
 - TapeKit contains no Solidity source for the container or its implementation (repository tree checked 18 Nov 2026).
@@ -207,3 +207,25 @@ The opener's write function `open(address,uint256)` (payable, `FEE()` = 0.08 OKB
 - The X Layer container implementation address is not published in TapeKit: UNKNOWN.
 
 Consequence for Bulla v2: paying into the container is **opt-in per invoice** (`payToContainer`, default `false` = pay the seller's wallet). The create form warns that a holder can only spend USDC sent to the container if the container supports outgoing calls, which is unconfirmed. To confirm before recommending it: read the beacon's implementation behind an opened X Layer container (ERC-1967 beacon slot) and check its verified source for an owner-gated `execute` (ERC-6551 `IERC6551Executable.execute(address,uint256,bytes,uint8)`, see https://eips.ethereum.org/EIPS/eip-6551). Owner: Grok Bot (WIN-AUDIT action 4).
+
+## 9. Container `execute`, opening, and TapeSend on X Layer (verified on chain 18 Nov 2026 by Grok Bot)
+
+Appended 18 Nov 2026; supersedes the UNKNOWN in section 8. Source for every row: `docs/planning/win-audit/onchain-checks.md` (bytecode selectors, live `eth_call` against `https://rpc.xlayer.tech`, and official TapeKit issue #5, maintainer reproduction on X Layer, 28 Sep 2026).
+
+| Fact | Detail |
+| --- | --- |
+| Container `execute` exists | ERC-6551 `execute(address to, uint256 value, bytes data, uint8 operation)`, selector `0x51945447`, present in the account logic and works in simulation. `executeCall(address,uint256,bytes)` (`0x9e5d4c49`) does not exist |
+| Only CALL | `operation` must be `0`. `operation = 1` reverts `OnlyCall()` (`0x90afeb14`) |
+| Execution fee | The holder attaches `EXEC_FEE()` as `msg.value`. It read `1300000000000000` wei (0.0013 OKB) on X Layer; without it the call reverts `ProtocolFeeTooLow(uint256,uint256)` (`0xafd49700`). Read it live before quoting a number: it can change with the beacon implementation |
+| Container must be opened | `execute` is gated on `opener.isOpened`. An unopened container reverts `NotPaid()` (`0x34e4a710`) until `open()` is paid (0.08 OKB, `docs/planning/mainnet-budget.md`) |
+| ERC-20 transfer specifically | Not simulated (the checked container's token balances were not read). A CALL to the token's `transfer` is the standard ERC-6551 way and is the path documented here |
+| TapeSend hub | Live on X Layer: hub proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee` (same on every chain), X Layer implementation `0xdCC57797089eBD9f26e686379A4323f353a3F9C6` matching the official client's pin; unsealed and, per its README, not independently audited |
+| Logs on the public RPC | `eth_getLogs` on `https://rpc.xlayer.tech` was rejected even for 2,000-block windows |
+
+What Bulla v2 does with this:
+
+- `payToContainer` stays **opt-in** per invoice (default: the circuit holder, normally the seller's wallet).
+- At every release the contract reads `opener.isOpened(processor, circuitId)`; if the container is not opened, the release goes to the circuit holder instead (fallback), so funds never land in a container that cannot yet move them.
+- The create form shows the container's opened status; the receipt explains how to withdraw: call the container's `execute(tokenAddress, 0, transfer(to, amount), 0)` with `EXEC_FEE()` attached, from the circuit holder's wallet, or use the official TapeOut app at https://www.tapeout.net/containers (section 3 above).
+- Because the public RPC rejects `eth_getLogs`, the seller history panel reads the new on-chain `circuitStats(processor, circuitId)` view instead of scanning events; timeline transaction links stay best-effort.
+- TapeSend stays out of scope for v2; `web/src/lib/notify.ts` is the seam.

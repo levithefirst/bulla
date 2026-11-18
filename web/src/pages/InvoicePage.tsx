@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { config, explorerAddress, explorerTx } from "../config";
+import { formatEther, type Address } from "viem";
 import { fmtAmount, fmtDuration, fmtTime, shortAddr, ZERO32 } from "../lib/format";
 import { parseError } from "../lib/errors";
 import {
@@ -12,6 +13,7 @@ import {
   useInvoice,
   useInvoiceTxs,
   useSellerHistory,
+  useExecFee,
   useTokenInfo,
   ZERO_ADDR,
   type InvoiceData,
@@ -132,16 +134,46 @@ function OpenAnother() {
   );
 }
 
+/** How a circuit holder moves USDC out of their container (docs/research.md section 9). */
+function WithdrawNote({ container, token, standIn }: { container: Address; token: Address; standIn: boolean }) {
+  const fee = useExecFee(container);
+  return (
+    <details className="withdraw-note" data-testid="withdraw-note">
+      <summary>How to withdraw from your container</summary>
+      {standIn ? (
+        <p className="muted small">This is a testnet stand-in container. It has no code, so nothing can be withdrawn from it; on X Layer mainnet the real TapeOut container works as below.</p>
+      ) : (
+        <ol className="small">
+          <li>The container must be opened (0.08 OKB, once, in the official app at https://www.tapeout.net/containers).</li>
+          <li>
+            From the wallet that holds the circuit, call the container's <span className="mono">execute(to, value, data, operation)</span> with <span className="mono">to</span> = the token{" "}
+            <span className="mono">{shortAddr(token)}</span>, <span className="mono">value</span> = 0, <span className="mono">data</span> = <span className="mono">transfer(yourWallet, amount)</span>,{" "}
+            <span className="mono">operation</span> = 0 (only CALL is allowed).
+          </li>
+          <li>
+            Attach the container's <span className="mono">EXEC_FEE()</span> as the transaction value:{" "}
+            <span className="num" data-testid="exec-fee">
+              {fee.data != null ? `${formatEther(fee.data)} OKB right now` : fee.isLoading ? "reading…" : "could not be read"}
+            </span>
+            . Without it the call reverts.
+          </li>
+          <li>Or use the official TapeOut app at https://www.tapeout.net/containers.</li>
+        </ol>
+      )}
+    </details>
+  );
+}
+
 function SellerHistoryPanel({ data, decimals, symbol }: { data: InvoiceData; decimals: number; symbol: string }) {
   const h = useSellerHistory(data.invoice.processor, data.invoice.circuitId);
   return (
     <section className="card" aria-labelledby="history-title" data-testid="seller-history">
       <h2 id="history-title">Seller history</h2>
       <p className="muted small">
-        Circuit #{data.invoice.circuitId.toString()} on processor <span className="mono">{shortAddr(data.invoice.processor)}</span>, read from this escrow's events. No backend.
+        Circuit #{data.invoice.circuitId.toString()} on processor <span className="mono">{shortAddr(data.invoice.processor)}</span>, counted on chain by this escrow. No backend.
       </p>
       {h.isLoading && <p className="muted small">Reading events…</p>}
-      {h.isError && <p className="muted small">History unavailable (the RPC log query failed).</p>}
+      {h.isError && <p className="muted small">History unavailable (RPC error).</p>}
       {h.data && (
         <dl className="lines">
           <div>
@@ -399,7 +431,13 @@ function Receipt({ idParam }: { idParam: string }) {
             <dt>Payout target</dt>
             <dd>
               <Value v={data.payoutTarget} label="payout target" testid="payout-target" />
-              <span className="fact-sub muted">{i.payToContainer ? "The seller's TapeOut container (follows the circuit)." : "The current holder of the circuit (re-checked at every release)."}</span>
+              <span className="fact-sub muted" data-testid="payout-note">
+                {i.payToContainer
+                  ? data.containerOpened
+                    ? "The seller's TapeOut container (opened; follows the circuit)."
+                    : "The seller asked for container payout, but the container is not opened yet, so releases go to the circuit holder until it is."
+                  : "The current holder of the circuit (re-checked at every release)."}
+              </span>
             </dd>
           </div>
           <div>
@@ -413,6 +451,9 @@ function Receipt({ idParam }: { idParam: string }) {
             <dt>Container (ERC-6551)</dt>
             <dd>
               <Value v={i.container} label="container address" testid="container-address" />
+              <span className="fact-sub muted" data-testid="container-opened">
+                {data.containerOpened ? "Opened" : "Not opened"}
+              </span>
             </dd>
           </div>
           <div>
@@ -444,6 +485,8 @@ function Receipt({ idParam }: { idParam: string }) {
             </div>
           )}
         </dl>
+
+        {i.payToContainer && <WithdrawNote container={i.container} token={i.token} standIn={standIn} />}
 
         <h2 className="section-h">Timeline</h2>
         <Timeline data={data} txs={txs.data ?? []} />

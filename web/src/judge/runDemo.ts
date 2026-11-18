@@ -1,7 +1,7 @@
 /**
  * One-tap judge-mode milestone escrow on X Layer TESTNET (1952), or the local CI node (31337).
  * Every step is a real transaction signed by an in-browser burner key:
- *   gas tank -> burners (testnet OKB), Freelancer mints a stand-in TapeOut circuit, Client mints DemoUSD
+ *   gas tank -> burners (testnet OKB), Freelancer mints a stand-in TapeOut circuit and opens its container, Client mints DemoUSD
  *   and approves, Freelancer creates a 2-milestone invoice paid into the circuit's container, Client funds,
  *   Freelancer submits both milestones, Client releases both: the DemoUSD lands in the container.
  * TapeOut has no testnet deployment, so the circuit, opener and factory are labelled stand-ins.
@@ -26,9 +26,21 @@ export const GAS_UNITS_PER_ROLE = 1_200_000n;
 /** Default per-run cap on what the tank may send, in gas units at the current price (override in wei with VITE_DEMO_RUN_CAP_WEI). */
 const RUN_CAP_GAS_UNITS = 3_000_000n;
 
+const openerAbi = [
+  {
+    type: "function",
+    name: "open",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "circuits", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "address" }],
+  },
+] as const;
 const demoUsdAbi = [{ type: "function", name: "mint", stateMutability: "nonpayable", inputs: [{ name: "amount", type: "uint256" }], outputs: [] }] as const;
 
-export type StepKey = "gasFreelancer" | "gasClient" | "circuit" | "mint" | "approve" | "create" | "fund" | "submit0" | "submit1" | "release0" | "release1";
+export type StepKey = "gasFreelancer" | "gasClient" | "circuit" | "open" | "mint" | "approve" | "create" | "fund" | "submit0" | "submit1" | "release0" | "release1";
 export type StepStatus = "idle" | "running" | "done" | "skipped" | "error";
 export type Step = { key: StepKey; label: string; role: Role | "tank"; status: StepStatus; hash?: Hex; note?: string };
 
@@ -36,6 +48,7 @@ export const STEPS: Omit<Step, "status">[] = [
   { key: "gasFreelancer", label: "Gas tank sends testnet OKB to the Freelancer", role: "tank" },
   { key: "gasClient", label: "Gas tank sends testnet OKB to the Client", role: "tank" },
   { key: "circuit", label: "Freelancer mints a circuit (testnet stand-in for TapeOut)", role: "freelancer" },
+  { key: "open", label: "Freelancer opens the circuit's container (stand-in; on mainnet open() costs 0.08 OKB)", role: "freelancer" },
   { key: "mint", label: "Client mints 250 DemoUSD", role: "client" },
   { key: "approve", label: "Client approves the escrow to pull DemoUSD", role: "client" },
   { key: "create", label: "Freelancer bills 2 milestones with that circuit (ownerOf checked on chain)", role: "freelancer" },
@@ -183,6 +196,8 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
       }
     }
     if (circuitId === null) throw new JudgeError("tx", "Circuit minted but no Transfer event was found.");
+    // Payouts reach a container only once it is opened (BullaEscrow falls back to the holder otherwise).
+    await send("open", "freelancer", () => fw.sendTransaction({ to: j.tapeout!.opener, data: encodeFunctionData({ abi: openerAbi, functionName: "open", args: [processor, circuitId!] }) }));
     const data = encodeFunctionData({
       abi: bullaEscrowAbi,
       functionName: "createInvoice",

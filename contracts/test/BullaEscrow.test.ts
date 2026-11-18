@@ -239,9 +239,11 @@ describe("BullaEscrow v2", () => {
   });
 
   describe("payout target", () => {
-    it("payToContainer pays the circuit's container", async () => {
+    it("payToContainer pays the circuit's container once it is opened", async () => {
       const f = await loadFixture(deployFixture);
+      await f.opener.open(await f.processor.getAddress(), 1);
       const { id } = await createFunded(f, { payToContainer: true });
+      expect(await f.escrow.containerOpened(id)).to.equal(true);
       expect(await f.escrow.payoutTarget(id)).to.equal(f.container);
       await expect(f.escrow.connect(f.buyer).releaseMilestone(id, 0)).to.emit(f.escrow, "MilestoneReleased").withArgs(id, 0n, f.container, D(100) - fee(D(100)), fee(D(100)), f.buyer.address);
       expect(await f.token.balanceOf(f.container)).to.equal(D(100) - fee(D(100)));
@@ -261,8 +263,22 @@ describe("BullaEscrow v2", () => {
       expect(await f.token.balanceOf(f.newHolder.address)).to.equal(D(300) - fee(D(300)));
     });
 
+    it("payToContainer falls back to the circuit holder while the container is not opened", async () => {
+      const f = await loadFixture(deployFixture);
+      const { id } = await createFunded(f, { payToContainer: true });
+      expect(await f.escrow.containerOpened(id)).to.equal(false);
+      expect(await f.escrow.payoutTarget(id)).to.equal(f.seller.address);
+      await f.escrow.connect(f.buyer).releaseMilestone(id, 0);
+      expect((await f.escrow.getMilestones(id))[0].paidTo).to.equal(f.seller.address);
+      await f.opener.open(await f.processor.getAddress(), 1);
+      await f.escrow.connect(f.buyer).releaseMilestone(id, 1);
+      expect((await f.escrow.getMilestones(id))[1].paidTo).to.equal(f.container);
+      expect(await f.token.balanceOf(f.container)).to.equal(D(300) - fee(D(300)));
+    });
+
     it("with payToContainer the container stays the target after a circuit transfer", async () => {
       const f = await loadFixture(deployFixture);
+      await f.opener.open(await f.processor.getAddress(), 1);
       const { id } = await createFunded(f, { payToContainer: true });
       await f.processor.connect(f.seller).transferFrom(f.seller.address, f.newHolder.address, 1);
       expect(await f.escrow.payoutTarget(id)).to.equal(f.container);
@@ -278,6 +294,26 @@ describe("BullaEscrow v2", () => {
       expect(await f.escrow.payoutTarget(id)).to.equal(f.seller.address);
       await f.escrow.connect(f.buyer).releaseMilestone(id, 0);
       expect((await f.escrow.getMilestones(id))[0].paidTo).to.equal(f.seller.address);
+    });
+  });
+
+  describe("circuit stats (on-chain payment history)", () => {
+    it("counts invoices, released and refunded milestones and released volume per circuit", async () => {
+      const f = await loadFixture(deployFixture);
+      const pa = await f.processor.getAddress();
+      const a = await createFunded(f, { arbiter: f.arbiter.address, dueTimestamp: (await time.latest()) + 3600 });
+      await f.escrow.connect(f.buyer).releaseMilestone(a.id, 0);
+      await create(f);
+      let st = await f.escrow.circuitStats(pa, 1);
+      expect(st.invoices).to.equal(2n);
+      expect(st.releasedMilestones).to.equal(1n);
+      expect(st.releasedAmount).to.equal(D(100));
+      await time.increaseTo(a.due);
+      await f.escrow.connect(f.buyer).claimRefund(a.id);
+      st = await f.escrow.circuitStats(pa, 1);
+      expect(st.refundedMilestones).to.equal(1n);
+      const other = await f.escrow.circuitStats(pa, 2);
+      expect(other.invoices).to.equal(0n);
     });
   });
 

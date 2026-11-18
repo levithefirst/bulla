@@ -26,6 +26,7 @@ describe("DemoUSD (judge-mode testnet token)", () => {
     await factory.addCpu(await proc.getAddress());
     const e = await (await ethers.getContractFactory("BullaEscrow")).deploy(await d.getAddress(), await opener.getAddress(), await factory.getAddress(), fr.address, 50, owner.address);
     await proc.connect(seller).mint();
+    await opener.open(await proc.getAddress(), 1); // payouts reach a container only once it is opened
     await d.connect(buyer).mint(100_000_000n);
     const due = (await ethers.provider.getBlock("latest"))!.timestamp + 3600;
     await e.connect(seller).createInvoice({

@@ -1,7 +1,8 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
-import { createPublicClient, http, erc20Abi, type Hex, type Address } from "viem";
+import { createPublicClient, createWalletClient, http, erc20Abi, type Hex, type Address } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { hardhat } from "viem/chains";
 import { injectWallet } from "./wallet";
 
@@ -234,6 +235,22 @@ test("two milestones paid into the TapeOut container, buyer release + arbiter re
     arbiter: keys.deployer.address,
   });
   const container = (await seller.getByTestId("container-address").first().textContent())!.trim() as Address;
+  // Container not opened yet: the contract falls back to paying the circuit holder.
+  await expect(seller.getByTestId("container-opened").first()).toHaveText("Not opened");
+  await expect(seller.getByTestId("payout-target")).toHaveText(keys.seller.address);
+  await expect(seller.getByTestId("payout-note")).toContainText("not opened yet");
+  await expect(seller.getByTestId("withdraw-note")).toBeVisible();
+  // Open the stand-in container (on mainnet: the official app, 0.08 OKB), then payouts go to the container.
+  const opener = createWalletClient({ chain: hardhat, transport: http(runtime.rpc), account: privateKeyToAccount(keys.seller.privateKey as Hex) });
+  const openHash = await opener.writeContract({
+    address: runtime.tapeout.opener,
+    abi: [{ type: "function", name: "open", stateMutability: "nonpayable", inputs: [{ name: "c", type: "address" }, { name: "t", type: "uint256" }], outputs: [{ name: "", type: "address" }] }],
+    functionName: "open",
+    args: [runtime.tapeout.processor, 1n],
+  });
+  await pub.waitForTransactionReceipt({ hash: openHash });
+  await seller.reload();
+  await expect(seller.getByTestId("container-opened").first()).toHaveText("Opened");
   await expect(seller.getByTestId("payout-target")).toHaveText(container);
   await expect(seller.getByTestId("arbiter")).toContainText(keys.deployer.address);
   const containerBefore = await bal(container);

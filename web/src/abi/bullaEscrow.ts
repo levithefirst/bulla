@@ -871,6 +871,52 @@ export const bullaEscrowAbi = [
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "processor",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "circuitId",
+        "type": "uint256"
+      }
+    ],
+    "name": "circuitStats",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint64",
+            "name": "invoices",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "releasedMilestones",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "refundedMilestones",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint256",
+            "name": "releasedAmount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct BullaEscrow.CircuitStats",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
@@ -879,6 +925,25 @@ export const bullaEscrowAbi = [
     "name": "claimRefund",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "containerOpened",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
