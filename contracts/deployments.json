@@ -3,31 +3,31 @@
     "xlayerTestnet": {
       "network": "xlayerTestnet",
       "chainId": 1952,
-      "escrow": "0x2EfE0B73B74b6fDed06371bbE51d1214d5f159a0",
+      "escrow": "0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6",
       "token": "0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3",
       "tokenSymbol": "USDC",
       "tokenDecimals": 6,
       "feeRecipient": "0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0",
       "feeBps": 50,
-      "deployedAt": "2026-11-18T08:32:36.028Z",
-      "deployBlock": 46531918,
+      "deployedAt": "2026-11-18T13:02:19.653Z",
+      "deployBlock": 46548101,
       "tapeout": {
-        "opener": "0xD118AB383E7a319272F6fbE727cf7283D43729F9",
-        "factory": "0xcc7F7b4B516639c65D05a9b96385BEC080a5eDc7",
-        "processor": "0x788F6cc2B425E9fcD543fc502c98B0267328310a",
+        "opener": "0x28e52EE0d5A1de8ACfEde35FBE4e6E4A0Fd46Ce5",
+        "factory": "0x466B99294C37C5c16dBc8e1Df4E810b497F2ab7e",
+        "processor": "0xb0884804390220E7B1090bA301Caa61C11540230",
         "standIn": true
       },
       "judge": {
-        "escrow": "0xe1a109deb5C4Fa6717889dfd0D6aC85152b800eF",
-        "token": "0x48d1b84d2AcECc20D1021A73EF421054Db0B1f24",
-        "deployBlock": 46531905,
+        "escrow": "0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4",
+        "token": "0xEE027cA6352924fbb8B6e10ffDc2B6b31Cc44A1e",
+        "deployBlock": 46548092,
         "feeRecipient": "0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0",
         "feeBps": 50,
-        "deployedAt": "2026-11-18T08:32:22.000Z",
+        "deployedAt": "2026-11-18T13:02:10.435Z",
         "tapeout": {
-          "opener": "0xD118AB383E7a319272F6fbE727cf7283D43729F9",
-          "factory": "0xcc7F7b4B516639c65D05a9b96385BEC080a5eDc7",
-          "processor": "0x788F6cc2B425E9fcD543fc502c98B0267328310a",
+          "opener": "0x28e52EE0d5A1de8ACfEde35FBE4e6E4A0Fd46Ce5",
+          "factory": "0x466B99294C37C5c16dBc8e1Df4E810b497F2ab7e",
+          "processor": "0xb0884804390220E7B1090bA301Caa61C11540230",
           "standIn": true
         }
       }
