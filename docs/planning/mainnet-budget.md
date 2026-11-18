@@ -194,3 +194,7 @@ Do not send a seed or a private key. If Fluid wants the 0.5% fees or the circuit
 - Sourcify exact match of BNB SiteRegistry implementation `0x1d279D138A4D803378a7d4557c056f1beD53c261` (`src/SiteRegistry.sol`)
 - Official OKX withdrawal table API: https://www.okx.com/v2/asset/withdraw/fee-amount-infos (used by https://www.okx.com/fees/withdrawal-info)
 - This repo: `contracts/artifacts/contracts/BullaEscrow.sol/BullaEscrow.json`, `contracts/scripts/deploy-xlayer.ts`, `contracts/contracts/BullaEscrow.sol`, and `deweb-out/manifest.json` from `npm run deweb:package`
+
+## Spent so far
+
+- 18 Nov 2026: v1 BullaEscrow deployed to mainnet at 0x6f74E81A8a3444D9C28D702582Ccf2F0a861790A (block 76192196), about $0.003 of gas. Superseded by v2 per the win audit; not recorded as the live escrow.
