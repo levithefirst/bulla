@@ -469,3 +469,77 @@ legend { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-trans
 .jstep-receipt { margin-top: 6px; font-size: 0.85rem; }
 .jstep-receipt summary { cursor: pointer; color: var(--text-secondary); }
 .jstep-receipt .lines-tight > div { padding: 4px 0; }
+
+/* ---------- UI upgrade layer: bold editorial pass ---------- */
+body { font-size: 15.5px; }
+.app { position: relative; isolation: isolate; }
+.topbar { position: sticky; top: 0; z-index: 30; backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--border-subtle); }
+.brand span { font-weight: 700; letter-spacing: -0.04em; font-size: 1.15rem; }
+.nav-link { font-weight: 550; }
+.net-pill { border-radius: 999px; }
+.net-dot { box-shadow: 0 0 0 4px color-mix(in srgb, var(--released-solid) 22%, transparent); }
+
+/* Buttons */
+.btn { min-height: 44px; border-radius: 999px; font-weight: 600; letter-spacing: -0.01em; transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s, background-color 0.18s, border-color 0.18s; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn-primary { box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--accent) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 16px 38px -14px color-mix(in srgb, var(--accent) 90%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.btn-lg { min-height: 52px; padding-inline: 24px; font-size: 1rem; }
+
+/* Type */
+h1, h2, h3 { letter-spacing: -0.035em; }
+.section-title { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.3rem); font-weight: 650; letter-spacing: -0.04em; margin-bottom: 0.8em; text-wrap: balance; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 8px; border: 1px solid var(--border-subtle); border-radius: 999px; background: color-mix(in srgb, var(--surface) 70%, transparent); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
+
+/* Hero */
+.hero { position: relative; padding-block: clamp(32px, 6vw, 88px) clamp(32px, 5vw, 64px); }
+.hero-bg { position: absolute; inset: -120px -50vw 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 60% at 78% 30%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 10% 0%, color-mix(in srgb, var(--funded-solid) 12%, transparent), transparent 70%),
+    linear-gradient(var(--border-subtle) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px) 0 0 / 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, #000 30%, transparent 80%); mask-image: radial-gradient(ellipse 70% 80% at 50% 30%, #000 30%, transparent 80%); opacity: 0.55; }
+.hero-title { font-size: clamp(2.5rem, 1.2rem + 5.2vw, 5.4rem); line-height: 0.98; letter-spacing: -0.055em; font-weight: 700; margin: 18px 0 22px; text-wrap: balance; overflow-wrap: normal; word-break: normal; hyphens: none; }
+.hero-accent { color: var(--accent-text); display: inline; }
+.hero .lead { font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem); max-width: 56ch; color: var(--text-secondary); }
+.cta-row { gap: 12px; }
+.facts-inline li { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.02em; }
+
+/* Receipt preview: floating seal card */
+.preview { perspective: 1200px; }
+.preview-card { border-radius: 20px; border: 1px solid var(--border-subtle); background: linear-gradient(180deg, var(--surface), var(--bg)); box-shadow: 0 40px 80px -40px rgba(0, 0, 0, 0.55), 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent); transform: rotateX(4deg) rotateY(-8deg) rotateZ(1deg); transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); animation: bulla-float 7s ease-in-out infinite; }
+.preview:hover .preview-card { transform: none; }
+.preview-amount { font-size: clamp(2.4rem, 1.6rem + 2.4vw, 3.4rem); font-weight: 650; letter-spacing: -0.05em; }
+@keyframes bulla-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+
+/* Sections and cards */
+.section { padding-block: clamp(40px, 6vw, 88px); border-top: 1px solid var(--border-subtle); }
+.card { border-radius: 18px; border-color: var(--border-subtle); background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--surface) 60%, var(--bg))); box-shadow: 0 24px 48px -36px rgba(0, 0, 0, 0.5); }
+.flow { counter-reset: none; }
+.flow-step { border-radius: 16px; border: 1px solid var(--border-subtle); background: var(--surface); padding: 20px; transition: border-color 0.2s, transform 0.2s; }
+.flow-step:hover { border-color: var(--border); transform: translateY(-2px); }
+.flow-n { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.05em; color: var(--accent-text); line-height: 1; }
+.who > div { border-left: 2px solid var(--accent); padding-left: 16px; }
+.who dt { font-weight: 650; font-size: 1.05rem; letter-spacing: -0.02em; }
+
+/* Receipt / invoice view */
+[data-testid="receipt"] { border-radius: 22px; }
+[data-testid="amount"] { letter-spacing: -0.05em; }
+.status { border-radius: 999px; font-weight: 600; }
+input, select, textarea { min-height: 44px; border-radius: 12px; transition: border-color 0.15s, box-shadow 0.15s; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 22%, transparent); }
+.ms-action { border-radius: 14px; }
+.footer { border-top: 1px solid var(--border-subtle); }
+
+@media (max-width: 720px) {
+  .preview-card { transform: none; animation: none; }
+  .cta-row > * { width: 100%; }
+  .cta-row .btn { justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-card { animation: none; transform: none; transition: none; }
+  .btn, .flow-step { transition: none; }
+  .btn:hover:not(:disabled), .flow-step:hover { transform: none; }
+}
