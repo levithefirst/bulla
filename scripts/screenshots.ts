@@ -55,6 +55,16 @@ async function main() {
     const submit = (id: bigint, i: bigint, what: string, uri: string) => send(seller.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "submitMilestone", args: [id, i, keccak256(toBytes(what)), uri] }));
     const arb = s.keys.deployer.address as Address;
 
+    // Open the stand-in container so invoice #1 pays into it (an unopened container falls back to the holder).
+    await send(
+      seller.writeContract({
+        address: s.tapeout.opener,
+        abi: [{ type: "function", name: "open", stateMutability: "nonpayable", inputs: [{ name: "c", type: "address" }, { name: "t", type: "uint256" }], outputs: [{ name: "", type: "address" }] }] as const,
+        functionName: "open",
+        args: [s.tapeout.processor, 1n],
+      }),
+    );
+
     // #1 three milestones into the container, one released, one submitted, arbiter set
     await create([["Wireframes", "400"], ["Build", "500"], ["Launch", "300"]], 9, "Brand identity and landing page", true, arb);
     await fund(1n, arb);

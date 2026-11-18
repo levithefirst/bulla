@@ -497,7 +497,7 @@ function Receipt({ idParam }: { idParam: string }) {
             <Qr value={link} size={112} label="QR code of this receipt link" />
           </div>
           <p className="muted small">
-            Read live from {config.chain.name}. Unaudited v1. <span className="print-only mono break">{link}</span>
+            Read live from {config.chain.name}. Unaudited. <span className="print-only mono break">{link}</span>
           </p>
         </footer>
       </article>

@@ -10,7 +10,7 @@ export function UnauditedWarning() {
     <div className="warn" data-testid="warn-unaudited" role="note">
       <Icon />
       <p>
-        <strong>Unaudited v1.</strong> BullaEscrow has not been audited. Only escrow amounts you can afford to lose.
+        <strong>Unaudited.</strong> BullaEscrow has not been audited. Only escrow amounts you can afford to lose.
       </p>
     </div>
   );
