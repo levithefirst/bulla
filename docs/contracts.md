@@ -1,94 +1,128 @@
-# BullaEscrow contract
+# BullaEscrow v2 contract
 
-Source: `contracts/contracts/BullaEscrow.sol`. Tests: `contracts/test/BullaEscrow.test.ts` (`npm test`). Toolchain: Hardhat 2.29, solc 0.8.24 (from the `solc` npm package, so no compiler download is needed), OpenZeppelin 5 (`IERC20`, `SafeERC20`, `ReentrancyGuard`, `Ownable`).
+Source: `contracts/contracts/BullaEscrow.sol`. Tests: `contracts/test/*.test.ts` (`npm test`, 57 passing). Toolchain: Hardhat 2.29, solc 0.8.24 (from the `solc` npm package, no compiler download), OpenZeppelin 5 (`IERC20`, `SafeERC20`, `ReentrancyGuard`, `Ownable`, `Math`).
 
-**Unaudited v1.** Do not escrow amounts you cannot afford to lose.
+**Unaudited.** Do not escrow amounts you cannot afford to lose. A superseded v1 escrow exists on X Layer mainnet (`docs/planning/mainnet-budget.md`); v2 replaces it and has a different ABI.
 
 ## Constructor
 
 ```solidity
-constructor(address token, address feeRecipient, uint16 feeBps, address initialOwner)
+constructor(address token, address opener, address factory, address feeRecipient, uint16 feeBps, address initialOwner)
 ```
 
-- `token`: the only ERC-20 this deployment accepts (immutable). Mainnet target is Circle USDC on X Layer, behind the decision gate in `docs/research.md`.
-- `feeRecipient`: receives the release fee. The owner can change it (`setFeeRecipient`), and that is the owner's only power.
-- `feeBps`: immutable, default 50 (0.5%), hard cap `MAX_FEE_BPS = 1000` (10%). This is Bulla's own fee, not an X Layer or TapeOut protocol fee.
+| Arg | Meaning | X Layer mainnet (196) | Testnet (1952) / local |
+| --- | --- | --- | --- |
+| `token` | The only ERC-20 accepted (immutable) | Circle USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` | testnet USDC `0xDec90b78111Ba2fc6FC6d84d8B9ec159A2d4b9B3`, or DemoUSD for judge mode |
+| `opener` | TapeOut container opener (immutable) | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` (official, hard-coded in deploy scripts) | `MockOpener` stand-in |
+| `factory` | TapeOut processor factory (immutable) | `0x1f09DAeFA827f02CBb40967cc91b259763760761` (official) | `MockTapeOutFactory` stand-in |
+| `feeRecipient` | Receives release fees; the owner can change it | chosen at deploy | chosen at deploy |
+| `feeBps` | Fee per release, immutable, at most 1000 | 50 (0.5%) | 50 |
+| `initialOwner` | Can only call `setFeeRecipient` | deployer | deployer |
+
+Addresses and sources: `docs/research.md` sections 8 and 9. Deploy scripts and `contracts/deployments.json` refuse any other opener or factory on chain 196, and the web build refuses stand-ins on 196.
+
+## Circuit binding
+
+`createInvoice` takes a TapeOut `processor` (circuit NFT contract) and `circuitId`. It requires:
+
+1. `factory.isCPU(processor)` (only real TapeOut processors; SPEC B.1),
+2. `processor.ownerOf(circuitId) == msg.sender` (only the circuit's holder can bill with it; SPEC B.3),
+
+and stores `container = opener.accountOf(processor, circuitId)` (the circuit's ERC-6551 account; SPEC B.2). The binding is emitted in `CircuitBound(id, processor, circuitId, container, payToContainer)`.
+
+The contract only reads TapeOut (`view` calls, executed as `staticcall`). It runs no circuit logic.
+
+## Payout rule (checked at every release)
+
+| Invoice setting | Container opened? | Release pays |
+| --- | --- | --- |
+| `payToContainer = true` | yes (`opener.isOpened`) | the circuit's container |
+| `payToContainer = true` | no | the current circuit holder (fallback) |
+| `payToContainer = false` (default) | n/a | the current circuit holder |
+| any | `ownerOf` reverts or returns 0 | the original seller |
+
+- The circuit holder is normally the seller. If the circuit NFT moves, later releases pay its new holder: receivables follow the circuit.
+- An opened X Layer container can send tokens out with ERC-6551 `execute(to, value, data, 0)` from the holder, with `EXEC_FEE()` attached as `msg.value` (0.0013 OKB when read on 18 Nov 2026; always read it live). Unopened containers revert `NotPaid()`, which is why the contract falls back until the container is opened (`docs/research.md` section 9).
+- Seller actions (submit, cancel) stay with the address that created the invoice. Only the payout follows the circuit.
+- `payoutTarget(id)` and `containerOpened(id)` return the live answers.
 
 ## States
+
+Invoice:
 
 | # | State | Meaning |
 | --- | --- | --- |
 | 0 | None | id does not exist |
-| 1 | Draft | seller created it; no funds held |
-| 2 | Funded | buyer deposited `totalAmount` |
-| 3 | Submitted | seller recorded a delivery hash (and optional URI) |
-| 4 | Released | buyer released; seller got `totalAmount - fee`, fee recipient got `fee` |
-| 5 | Refunded | due time passed; buyer reclaimed `totalAmount` |
-| 6 | Cancelled | both parties consented; buyer got `totalAmount` back if it was funded |
+| 1 | Draft | created; nothing funded |
+| 2 | Funded | the buyer deposited the full amount; milestones in progress |
+| 3 | Completed | every milestone resolved by release or arbiter refund |
+| 4 | Refunded | after the due date the buyer reclaimed every unresolved milestone |
+| 5 | Cancelled | both parties consented; the unresolved remainder (if funded) went back to the buyer |
+
+Milestone: `Pending (0) -> Submitted (1) -> Released (2) | Refunded (3)`. Pending can also go straight to Released (early release) or Refunded (time-lock or cancel).
 
 ```
-Draft --fund(buyer)--> Funded --submit(seller)--> Submitted --release(buyer)--> Released
-  |                      |  \--release(buyer)------------------------------------^
-  |                      |--claimRefund(buyer, now >= due)--> Refunded <--claimRefund--Submitted
-  \--mutualCancel x2-->  Cancelled <--mutualCancel x2-- Funded / Submitted (refund buyer)
+Draft --fund(buyer, accepts arbiter)--> Funded --(every milestone Released/Refunded)--> Completed
+  |                                       |--claimRefund(buyer, now >= due)--> Refunded (unresolved only)
+  \--mutualCancel x2--> Cancelled <--mutualCancel x2-- Funded (unresolved remainder to buyer)
+
+per milestone (while Funded):  Pending --submitMilestone(seller)--> Submitted
+  Pending|Submitted --releaseMilestone(buyer)--> Released (pay target, fee)
+  Submitted --arbiterRelease--> Released     Submitted --arbiterRefund--> Refunded
 ```
+
+The UI shows a refined status: Draft, Funded, Submitted (a delivery awaits release), Partly released, Released (all paid), Completed (settled with some arbiter refunds), Refunded, Cancelled.
 
 ## Functions and callers
 
-| Function | Caller | Allowed states | Time rule | Effect |
-| --- | --- | --- | --- | --- |
-| `createInvoice(buyer, token, amount, due, deliveryHash, circuitContainerId, memo)` | anyone (becomes seller) | n/a | `due > now` | new Draft. `token` must equal `token()`; `buyer` not zero and not the seller; `amount > 0`; `circuitContainerId != 0`. `deliveryHash` is an optional pre-agreed hash (may be zero) and is overwritten on submit |
-| `fundInvoice(id)` | buyer | Draft | `now < due` | pulls `totalAmount` with `transferFrom` (approve first). Rejects tokens that deliver less than requested |
-| `submitDelivery(id, hash, uri)` | seller | Funded, Submitted | `now < due` | records non-zero `hash` and `uri`; can be repeated to update |
-| `releaseFunds(id)` | buyer | Funded, Submitted | any | pays `net` to seller and `fee` to `feeRecipient` |
-| `claimRefund(id)` | buyer | Funded, Submitted | `now >= due` | returns `totalAmount` to buyer, no fee |
-| `mutualCancel(id)` | seller or buyer | Draft, Funded, Submitted | any | records this party's consent; when both have consented → Cancelled, refund buyer if funded, no fee |
-| `setFeeRecipient(addr)` | owner | n/a | n/a | changes fee recipient only |
-| `getInvoice(id)`, `quoteRelease(amount)`, `invoiceCount()`, `totalHeld()` | anyone | n/a | n/a | views |
+| Function | Caller | When | Effect |
+| --- | --- | --- | --- |
+| `createInvoice(CreateParams)` | the circuit's holder (becomes seller) | `due > now` | Draft. 1 to 10 milestones (amount > 0, label at most 80 bytes); `token == token()`; buyer not zero or seller; arbiter zero or not buyer/seller; circuit checks above |
+| `fundInvoice(id, acceptedArbiter)` | buyer | Draft, `now < due` | pulls the full amount (approve first); `acceptedArbiter` must equal the proposed arbiter; rejects short-delivering tokens (`TransferShortfall`) |
+| `submitMilestone(id, i, hash, uri)` | seller | Funded, milestone Pending/Submitted, `now < due` | records a non-zero hash and optional URI; repeatable |
+| `releaseMilestone(id, i)` | buyer | Funded, milestone Pending/Submitted | pays `net` to the payout target and `fee` to `feeRecipient` |
+| `arbiterRelease(id, i)` | arbiter | Funded, milestone Submitted | as release (fee applies, arbiter gets nothing) |
+| `arbiterRefund(id, i)` | arbiter | Funded, milestone Submitted | returns that milestone to the buyer, no fee |
+| `claimRefund(id)` | buyer | Funded, `now >= due` | returns every unresolved milestone, no fee; state Refunded |
+| `mutualCancel(id)` | seller or buyer | Draft or Funded | records consent; with both, Cancelled and the unresolved remainder returns to the buyer |
+| `setFeeRecipient(addr)` | owner | any | only owner power |
+| `getInvoice`, `getMilestones`, `payoutTarget`, `containerOpened`, `circuitStats`, `quoteRelease`, `invoiceCount`, `totalHeld` | anyone | any | views |
 
-Notes on the time-lock: the buyer can refund after `dueTimestamp` even if the seller already submitted. That is the v1 rule: the seller should pick a due date that leaves the buyer review time, and the buyer can release any time before or after the due date as long as they have not refunded. Funding and submitting are blocked at or after the due date so nobody starts work on an already-refundable invoice.
+The due date: funding and submitting stop at `dueTimestamp`; from then on the buyer can reclaim unreleased milestones even if they were submitted. Sellers should leave review time, or name an arbiter.
 
 ## Fee math
 
 ```
-fee = totalAmount * feeBps / 10_000     (integer division, rounds down)
-net = totalAmount - fee
+fee = mulDiv(milestoneAmount, feeBps, 10_000)   (rounds down, cannot overflow)
+net = milestoneAmount - fee
 ```
 
-`quoteRelease` uses OpenZeppelin `Math.mulDiv`, so it cannot overflow for any `uint256` amount.
+At 50 bps: a 250.000000 milestone pays 1.250000 fee and 248.750000 net. Fees apply only to releases (buyer or arbiter); refunds and cancels are free.
 
-Example at 50 bps with a 6-decimal token: 250.000000 → fee 1.250000, net 248.750000. 1.000000 → fee 0.005000. Amounts below 200 base units pay zero fee. Fees are only taken on `releaseFunds`; refunds and cancels return the full amount.
+## Accounting and on-chain history
+
+- `totalHeld` = sum of unresolved milestone amounts over Funded invoices. `token.balanceOf(escrow) >= totalHeld`, equal unless someone sends tokens directly (those are stuck; no sweep function by design).
+- `circuitStats(processor, circuitId)` counts invoices billed, milestones released and refunded, and gross released volume per circuit. The receipt's seller history reads it, because the public X Layer RPC rejects `eth_getLogs`.
 
 ## Events
 
-`EscrowConfigured(token, feeRecipient, feeBps, owner)` (constructor), `InvoiceCreated`, `InvoiceFunded`, `DeliverySubmitted`, `FundsReleased(id, seller, net, fee)`, `FeePaid(id, feeRecipient, fee)` (only when fee > 0), `Refunded`, `CancelConsentGiven`, `InvoiceCancelled(id, refundedToBuyer)`, `FeeRecipientUpdated`.
+`EscrowConfigured`, `InvoiceCreated`, `CircuitBound`, `MilestoneDefined`, `ArbiterProposed`, `InvoiceFunded`, `MilestoneSubmitted`, `MilestoneReleased(id, index, paidTo, net, fee, by)`, `FeePaid`, `MilestoneRefunded(id, index, amount, by)`, `InvoiceCompleted`, `Refunded`, `CancelConsentGiven`, `InvoiceCancelled`, `FeeRecipientUpdated`.
 
 ## Custom errors
 
-Every revert is a custom error: `ZeroAddress`, `FeeTooHigh(feeBps)`, `UnsupportedToken(token)`, `InvalidAmount` (zero amount), `TransferShortfall(expected, received)` (fee-on-transfer or rebasing token at funding), `InvalidBuyer`, `DueInPast`, `MissingContainerId`, `MissingDeliveryHash`, `InvoiceNotFound(id)`, `NotSeller`, `NotBuyer`, `NotParty`, `WrongState(current)`, `PastDue`, `NotYetDue(dueTimestamp)`, `AlreadyConsented`, plus OpenZeppelin's `OwnableUnauthorizedAccount`, `ReentrancyGuardReentrantCall`, and SafeERC20 errors. The web app maps each to a plain-English message.
-
-## Accounting
-
-`totalHeld` is the sum of `totalAmount` over invoices in Funded or Submitted. It rises on `fundInvoice` and falls on release, refund, and a funded cancel. `token.balanceOf(escrow) >= totalHeld` always; it is equal unless someone transfers tokens to the contract directly (those are stuck: there is deliberately no sweep function, so the owner can never move funds).
+`ZeroAddress`, `FeeTooHigh`, `UnsupportedToken`, `InvalidAmount`, `TransferShortfall`, `InvalidBuyer`, `InvalidArbiter`, `DueInPast`, `InvalidMilestones`, `LabelTooLong`, `NotTapeOutProcessor`, `NotCircuitHolder`, `MissingDeliveryHash`, `InvoiceNotFound`, `MilestoneNotFound`, `NotSeller`, `NotBuyer`, `NotArbiter`, `NotParty`, `ArbiterMismatch`, `WrongState`, `WrongMilestoneState`, `PastDue`, `NotYetDue`, `AlreadyConsented`, plus OpenZeppelin's `OwnableUnauthorizedAccount`, `ReentrancyGuardReentrantCall` and SafeERC20 errors. The web app maps them to plain English.
 
 ## Safety properties (tested)
 
-- State is written before any token transfer (checks-effects-interactions), and every transfer path is `nonReentrant`. A malicious token that re-enters `releaseFunds` or `claimRefund` during a transfer makes the whole transaction revert (`ReentrancyGuardReentrantCall`), and balances are unchanged.
-- Each invoice can pay out once: double release, release after refund, refund after release and double fund all revert with `WrongState`.
-- Only the buyer can fund, release and refund; only the seller can submit; only the two parties can cancel. The owner cannot call any of these on someone else's behalf.
-- Wrong token: `createInvoice` rejects any token other than the configured one (`UnsupportedToken`); fee-on-transfer tokens are rejected at funding (`TransferShortfall`).
+- Every function that moves tokens is `nonReentrant` and writes state before transferring. A token that re-enters `releaseMilestone` or `claimRefund` reverts the whole transaction.
+- Each milestone pays out at most once; states only move forward.
+- The owner cannot fund, release, refund, cancel, or move funds.
+- A reverting or burned circuit cannot trap funds at release (payout falls back to the seller), and the time-lock refund never calls TapeOut.
 
 ## Fuzz and invariant tests
 
-`contracts/test/BullaEscrow.invariants.test.ts` is a seeded, reproducible stateful random walk (Hardhat has no built-in invariant runner, so the harness is explicit). Each run deploys a fresh escrow with a fee in 0..1000 bps, two sellers, two buyers and a stranger, then takes random steps: create (sometimes invalid), fund, submit, release, refund, cancel, unknown ids, wrong callers, and time warps. After **every** step it checks:
-
-1. `token.balanceOf(escrow) == totalHeld == sum(totalAmount of Funded/Submitted invoices)`
-2. no invoice state goes backwards, and a closed state (Released, Refunded, Cancelled) never changes
-3. every release pays `fee == floor(amount * feeBps / 10000)`, so `fee <= amount * feeBps / 10000`, and seller plus fee recipient receive exactly the escrowed amount
-4. refunds and funded cancels return the full amount to the buyer with no fee
-
-A final check asserts the walks reached every state. A separate fuzz test checks `quoteRelease` for random and extreme amounts (up to `2^256 - 1`) at several fee rates. Defaults: 6 runs × 120 steps (`npm test`). Larger campaign: `FUZZ_RUNS=20 FUZZ_STEPS=300 FUZZ_SEED=20261114 npx hardhat test test/BullaEscrow.invariants.test.ts`.
+`contracts/test/BullaEscrow.invariants.test.ts`: seeded random walks (6 runs x 140 steps by default) over creates (valid and invalid circuits, 1 to 4 milestones, container opt-in, optional arbiter), funding (with right and wrong arbiter acceptance), submits, buyer and arbiter releases, arbiter refunds, time-lock refunds, cancels, circuit transfers, container opens and time warps. After every step it checks: escrow balance == `totalHeld` == sum of unresolved milestones; no invoice or milestone state goes backwards; released + refunded never exceeds the total; `circuitStats` matches the invoices. Every successful release is checked for the exact fee and the right payee (container if opted in and opened, else the live holder). A final test asserts every invoice and milestone state was reached. Larger campaign: `FUZZ_RUNS=20 FUZZ_STEPS=300 FUZZ_SEED=20261118 npx hardhat test test/BullaEscrow.invariants.test.ts` (passed on 18 Nov 2026 after the opened-container change: 22 passing, 20 walks x 300 steps).
 
 ## Static analysis
 
-Slither 0.11.6 reports are in `docs/slither.md`. The first run found 0 high, 1 medium (an `incorrect-equality` false positive on the enum existence check in `getInvoice`) and 5 low. The existence check is now a range check on the sequential id (`id == 0 || id > invoiceCount`), and a re-run reports 0 high, 0 medium and 4 low; the lows are the intended `block.timestamp` due-date comparisons. Slither is not an audit.
+Slither 0.11.6, `docs/slither.md`: v2 is 0 high, 0 medium, 4 low (intended due-date timestamp checks) and 1 informational (`createInvoice` complexity). Not an audit.
