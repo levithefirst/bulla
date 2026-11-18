@@ -9,5 +9,7 @@ import { config } from "../config";
 // TapeKit's config) groups the TapeOut name lookup into a few requests.
 export const client = createClient({
   chain: config.chain,
+  // Short receipt polling on X Layer testnet (~1 s blocks); other networks keep viem's default.
+  pollingInterval: config.chain.id === 1952 ? 250 : undefined,
   transport: http(config.rpcUrl, { timeout: 20_000, batch: { batchSize: 10, wait: 16 } }),
 });

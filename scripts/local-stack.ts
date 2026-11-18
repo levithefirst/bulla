@@ -141,6 +141,12 @@ export async function startLocalStack(opts: { rpcPort: number; webPort: number; 
       },
       path.join(root, "web"),
     );
+    // Optional live-like block time for timing runs: E2E_BLOCK_MS=1000 switches the node to interval mining after setup.
+    if (process.env.E2E_BLOCK_MS) {
+      await pub.request({ method: "evm_setAutomine" as never, params: [false] as never });
+      await pub.request({ method: "evm_setIntervalMining" as never, params: [Number(process.env.E2E_BLOCK_MS)] as never });
+      console.log(`[${opts.tag}] interval mining: one block every ${process.env.E2E_BLOCK_MS} ms`);
+    }
     procs.push(spawn("npx", ["vite", "preview", "--outDir", opts.outDir, "--port", String(opts.webPort), "--strictPort"], { cwd: path.join(root, "web"), stdio: ["ignore", "ignore", "inherit"], detached: true }));
     const baseURL = `http://127.0.0.1:${opts.webPort}/`;
     await waitFor(baseURL);

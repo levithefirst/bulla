@@ -317,7 +317,7 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
               {fmtAmount(DEMO_AMOUNT, 6)} <span className="sym">DemoUSD</span>
             </p>
             {history.length > 0 && (
-              <ol className="state-history" aria-label="Status changes read from chain" data-testid="judge-history">
+              <ol className="state-history" aria-label="Status changes confirmed on chain" data-testid="judge-history">
                 {history.map((st, k) => (
                   <li key={k}>
                     <StatusBadge state={st} />

@@ -92,7 +92,7 @@ const balance = async (a: Address) => BigInt((await client.request({ method: "et
  * The public X Layer testnet RPC is load-balanced: a read right after a confirmed receipt can land on a node
  * one block behind and revert (e.g. InvoiceNotFound). Retry reads briefly instead of failing the demo.
  */
-async function settled<T>(fn: () => Promise<T>, tries = 24, waitMs = 250): Promise<T> {
+async function settled<T>(fn: () => Promise<T>, tries = 15, waitMs = 200): Promise<T> {
   for (let n = 1; ; n++) {
     try {
       return await fn();
@@ -102,6 +102,12 @@ async function settled<T>(fn: () => Promise<T>, tries = 24, waitMs = 250): Promi
     }
   }
 }
+/** Receipt poll interval. X Layer has ~1 s blocks, so a short poll keeps the wait close to the block time. */
+const RECEIPT_POLL_MS = 200;
+/** Gas price sent with every judge transaction: the node's price plus 20%, so a price tick does not strand a pipelined tx. */
+const bumped = (gp: bigint) => (gp * 12n) / 10n;
+/** Explicit gas limits (ceilings, not spend): skipping eth_estimateGas saves a round trip per transaction. */
+const GAS = { circuit: 150_000n, open: 200_000n, create: 700_000n, mint: 150_000n, approve: 100_000n, fund: 300_000n, submit: 250_000n, release: 350_000n } as const;
 const nonceOf = async (a: Address) => Number(BigInt((await client.request({ method: "eth_getTransactionCount", params: [a, "pending"] })) as Hex));
 const gasPriceNow = async () => BigInt((await client.request({ method: "eth_gasPrice" })) as Hex);
 
@@ -116,7 +122,7 @@ export async function tankStatus(): Promise<{ address: Address; balance: bigint;
   const a = tankAddress();
   if (!a) return null;
   const [b, gp] = await Promise.all([balance(a), gasPriceNow()]);
-  const perRun = gp * GAS_UNITS_PER_ROLE * 2n + gp * 21_000n * 2n;
+  const perRun = bumped(gp) * GAS_UNITS_PER_ROLE * 2n + bumped(gp) * 21_000n * 2n;
   return { address: a, balance: b, perRun, runsLeft: perRun > 0n ? Number(b / perRun) : 0 };
 }
 
@@ -138,9 +144,16 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   const fw = createWalletClient({ account: privateKeyToAccount(burners.freelancer.privateKey), chain, transport });
   const cw = createWalletClient({ account: privateKeyToAccount(burners.client.privateKey), chain, transport });
 
-  const gasPrice = await gasPriceNow();
+  const gasPrice = bumped(await gasPriceNow());
   const need = gasPrice * GAS_UNITS_PER_ROLE;
-  const [fb, cb, tb] = await Promise.all([balance(burners.freelancer.address), balance(burners.client.address), balance(tank.account.address)]);
+  const [fb, cb, tb, tn, fn0, cn0] = await Promise.all([
+    balance(burners.freelancer.address),
+    balance(burners.client.address),
+    balance(tank.account.address),
+    nonceOf(tank.account.address),
+    nonceOf(burners.freelancer.address),
+    nonceOf(burners.client.address),
+  ]);
   const topUps = [fb < need ? need - fb : 0n, cb < need ? need - cb : 0n];
   const spend = topUps[0] + topUps[1] + gasPrice * 21_000n * 2n;
   const cap = runCapWei(gasPrice);
@@ -165,7 +178,7 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
     }
   };
   const confirm = async ({ key, hash }: { key: StepKey; hash: Hex }) => {
-    const r = await waitForReceipt(client, hash, 120_000, 150);
+    const r = await waitForReceipt(client, hash, 120_000, RECEIPT_POLL_MS);
     if (r.status !== "success") {
       hooks.step(key, { status: "error", note: "reverted" });
       throw new JudgeError("tx", `${label(key)} reverted on chain (tx ${hash}).`);
@@ -178,28 +191,32 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     encodeFunctionData({ abi: bullaEscrowAbi, functionName: fn, args } as any);
 
-  // 2. Gas: tank -> burners.
-  const tn = await nonceOf(tank.account.address);
-  const gasTxs: { key: StepKey; hash: Hex }[] = [];
-  let i = 0;
-  if (topUps[0]) gasTxs.push(await submit("gasFreelancer", "tank", () => tank.sendTransaction({ to: burners.freelancer.address, value: topUps[0], nonce: tn + i++ })));
-  else skip("gasFreelancer", "already has gas");
-  if (topUps[1]) gasTxs.push(await submit("gasClient", "tank", () => tank.sendTransaction({ to: burners.client.address, value: topUps[1], nonce: tn + i++ })));
-  else skip("gasClient", "already has gas");
-  await Promise.all(gasTxs.map(confirm));
+  // 2. Gas: both top-ups broadcast together up front (nonces assigned locally), receipts awaited together.
+  const gasTxs = await Promise.all([
+    topUps[0] ? submit("gasFreelancer", "tank", () => tank.sendTransaction({ to: burners.freelancer.address, value: topUps[0], nonce: tn, gas: 21_000n, gasPrice })) : (skip("gasFreelancer", "already has gas"), null),
+    topUps[1] ? submit("gasClient", "tank", () => tank.sendTransaction({ to: burners.client.address, value: topUps[1], nonce: tn + (topUps[0] ? 1 : 0), gas: 21_000n, gasPrice })) : (skip("gasClient", "already has gas"), null),
+  ]);
+  await Promise.all(gasTxs.filter((t): t is { key: StepKey; hash: Hex } => !!t).map(confirm));
 
-  // 3. Freelancer: mint circuit -> create invoice. Client in parallel: mint DemoUSD -> approve.
-  const [cBal, cAllow, cn, now] = await Promise.all([
+  // 3. Local nonces per burner, explicit gas and gas price (no estimate round trips). Dependent steps still wait for their receipt:
+  //    circuit -> (open + create together) -> fund -> (submit0 + submit1 together) -> (release0 + release1 together).
+  //    The Client's mint + approve are broadcast alongside the Freelancer's circuit mint, and fund is broadcast the moment the
+  //    create receipt arrives, without waiting for mint/approve receipts (same sender, lower nonces, so they land first).
+  const [cBal, cAllow, now] = await Promise.all([
     ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [burners.client.address] }),
     ethCall(client, { address: j.token, abi: erc20Abi, functionName: "allowance", args: [burners.client.address, j.escrow] }),
-    nonceOf(burners.client.address),
     client.request({ method: "eth_getBlockByNumber", params: ["latest", false] }) as Promise<{ timestamp: Hex }>,
   ]);
   const due = BigInt(now.timestamp) + 7n * 86_400n;
-  let cNonce = cn;
+  let fNonce = fn0;
+  let cNonce = cn0;
+  const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
-  const freelancerChain = async () => {
-    const r = await send("circuit", "freelancer", () => fw.sendTransaction({ to: processor, data: encodeFunctionData({ abi: mockProcessorAbi, functionName: "mint", args: [] }) }));
+  let container: Address | null = null;
+  let containerBeforeP: Promise<bigint> | null = null;
+  const freelancerFlow = async () => {
+    const mintTx = await submit("circuit", "freelancer", () => fw.sendTransaction({ to: processor, data: encodeFunctionData({ abi: mockProcessorAbi, functionName: "mint", args: [] }), nonce: fNonce++, gas: GAS.circuit, gasPrice }));
+    const r = await confirm(mintTx);
     let circuitId: bigint | null = null;
     for (const log of r.logs) {
       try {
@@ -210,9 +227,9 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
       }
     }
     if (circuitId === null) throw new JudgeError("tx", "Circuit minted but no Transfer event was found.");
-    // Payouts reach a container only once it is opened (BullaEscrow falls back to the holder otherwise).
-    await send("open", "freelancer", () => fw.sendTransaction({ to: j.tapeout!.opener, data: encodeFunctionData({ abi: openerAbi, functionName: "open", args: [processor, circuitId!] }) }));
-    const data = encodeFunctionData({
+    const cid = circuitId;
+    // Payouts reach a container only once it is opened (BullaEscrow falls back to the holder otherwise). Opening and billing are independent.
+    const createData = encodeFunctionData({
       abi: bullaEscrowAbi,
       functionName: "createInvoice",
       args: [
@@ -223,82 +240,95 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
           labels: DEMO_MILESTONES.map((m) => m.label),
           dueTimestamp: due,
           processor,
-          circuitId,
+          circuitId: cid,
           payToContainer: true,
-          arbiter: "0x0000000000000000000000000000000000000000",
+          arbiter: ZERO,
           termsHash: keccak256(toBytes("Bulla judge-mode demo scope")),
           memo: "Judge-mode demo: logo, 2 milestones (testnet)",
         },
       ],
     });
-    return send("create", "freelancer", () => fw.sendTransaction({ to: j.escrow, data }));
-  };
-  const clientChain = async () => {
-    const txs: { key: StepKey; hash: Hex }[] = [];
-    if (cBal >= DEMO_AMOUNT) skip("mint", "already holds DemoUSD");
-    else txs.push(await submit("mint", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: demoUsdAbi, functionName: "mint", args: [DEMO_AMOUNT] }), nonce: cNonce++, gas: 120_000n })));
-    if (cAllow >= DEMO_AMOUNT) skip("approve", "allowance already set");
-    else txs.push(await submit("approve", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [j.escrow, maxUint256] }), nonce: cNonce++, gas: 80_000n })));
-    await Promise.all(txs.map(confirm));
-  };
-  const send = async (key: StepKey, role: Role | "tank", fn: () => Promise<Hex>) => confirm(await submit(key, role, fn));
-  const [createRcpt] = await Promise.all([freelancerChain(), clientChain()]);
-
-  let invoiceId: bigint | null = null;
-  for (const log of createRcpt.logs) {
-    try {
-      const ev = decodeEventLog({ abi: bullaEscrowAbi, data: log.data, topics: log.topics });
-      if (ev.eventName === "InvoiceCreated") invoiceId = ev.args.id;
-      if (ev.eventName === "CircuitBound") hooks.container(ev.args.container, ev.args.circuitId);
-    } catch {
-      /* other log */
+    const openNonce = fNonce++;
+    const createNonce = fNonce++;
+    const [openTx, createTx] = await Promise.all([
+      submit("open", "freelancer", () => fw.sendTransaction({ to: j.tapeout!.opener, data: encodeFunctionData({ abi: openerAbi, functionName: "open", args: [processor, cid] }), nonce: openNonce, gas: GAS.open, gasPrice })),
+      submit("create", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: createData, nonce: createNonce, gas: GAS.create, gasPrice })),
+    ]);
+    const [, createRcpt] = await Promise.all([confirm(openTx), confirm(createTx)]);
+    let id: bigint | null = null;
+    for (const log of createRcpt.logs) {
+      try {
+        const ev = decodeEventLog({ abi: bullaEscrowAbi, data: log.data, topics: log.topics });
+        if (ev.eventName === "InvoiceCreated") id = ev.args.id;
+        if (ev.eventName === "CircuitBound") {
+          container = ev.args.container;
+          hooks.container(ev.args.container, ev.args.circuitId);
+        }
+      } catch {
+        /* other log */
+      }
     }
-  }
-  if (invoiceId === null) throw new JudgeError("tx", "Invoice created but no InvoiceCreated event was found.");
-  const id = invoiceId;
-  const inv0 = await settled(() => ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }));
-  const container = inv0.container;
-  const containerBefore = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
-  // minMs: the lowest milestone state this read must show (a lagging node returns the previous block).
-  const readState = async (minState = 1, minMs = 0) => {
-    const [inv, ms] = await settled(async () => {
-      const r = await Promise.all([
-        ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }),
-        ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id] }),
-      ]);
-      if (Number(r[0].state) < minState || r[1].some((m) => Number(m.state) < minMs)) throw new Error("stale read");
-      return r;
-    });
-    hooks.state(id, Number(inv.state), ms.map((m) => Number(m.state)));
+    if (id === null || !container) throw new JudgeError("tx", "Invoice created but no InvoiceCreated/CircuitBound event was found.");
+    containerBeforeP = ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
+    containerBeforeP.catch(() => undefined);
+    hooks.state(id, 1, [0, 0]); // Draft: the create receipt succeeded
+    return id;
   };
-  await readState(1, 0);
+  const clientFlow = async (created: Promise<bigint>) => {
+    const pre: Promise<unknown>[] = [];
+    if (cBal >= DEMO_AMOUNT) skip("mint", "already holds DemoUSD");
+    else pre.push(confirm(await submit("mint", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: demoUsdAbi, functionName: "mint", args: [DEMO_AMOUNT] }), nonce: cNonce++, gas: GAS.mint, gasPrice }))));
+    if (cAllow >= DEMO_AMOUNT) skip("approve", "allowance already set");
+    else pre.push(confirm(await submit("approve", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [j.escrow, maxUint256] }), nonce: cNonce++, gas: GAS.approve, gasPrice }))));
+    const preAll = Promise.all(pre);
+    preAll.catch(() => undefined);
+    const id = await created;
+    const fundTx = await submit("fund", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("fundInvoice", [id, ZERO]), nonce: cNonce++, gas: GAS.fund, gasPrice }));
+    await Promise.all([preAll, confirm(fundTx)]);
+    hooks.state(id, 2, [0, 0]); // Funded: the fund receipt succeeded
+    return id;
+  };
+  const created = freelancerFlow();
+  created.catch(() => undefined);
+  const [id] = await Promise.all([created, clientFlow(created)]);
+  const containerAddr = container as Address | null;
+  if (!containerAddr) throw new JudgeError("tx", "Circuit container address missing.");
+  const containerBefore = await containerBeforeP!;
 
-  // 4. Lock, then deliver both milestones (pipelined), then release both (pipelined).
-  await send("fund", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("fundInvoice", [id, "0x0000000000000000000000000000000000000000"]), gas: 300_000n }));
-  await readState(2, 0);
-  const fn = await nonceOf(burners.freelancer.address);
-  const subs = [
-    await submit("submit0", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), nonce: fn, gas: 200_000n })),
-    await submit("submit1", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), nonce: fn + 1, gas: 200_000n })),
-  ];
+  // 4. Deliver both milestones together, then release both together. State changes below come from the confirmed receipts;
+  //    the final read at the end checks them against the chain.
+  const subs = await Promise.all([
+    submit("submit0", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), nonce: fNonce++, gas: GAS.submit, gasPrice })),
+    submit("submit1", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), nonce: fNonce++, gas: GAS.submit, gasPrice })),
+  ]);
   await Promise.all(subs.map(confirm));
-  await readState(2, 1);
-  const cn2 = await nonceOf(burners.client.address);
-  const rels = [
-    await submit("release0", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 0n]), nonce: cn2, gas: 250_000n })),
-    await submit("release1", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 1n]), nonce: cn2 + 1, gas: 250_000n })),
-  ];
+  hooks.state(id, 2, [1, 1]);
+  const rels = await Promise.all([
+    submit("release0", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 0n]), nonce: cNonce++, gas: GAS.release, gasPrice })),
+    submit("release1", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 1n]), nonce: cNonce++, gas: GAS.release, gasPrice })),
+  ]);
   await Promise.all(rels.map(confirm));
-  await readState(3, 2);
+  hooks.state(id, 3, [2, 2]);
+
+  // 5. Verify against the chain (the load-balanced RPC may lag one block, so reads retry fast and briefly).
+  const [inv, ms] = await settled(async () => {
+    const r = await Promise.all([
+      ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }),
+      ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id] }),
+    ]);
+    if (Number(r[0].state) < 3 || r[1].some((m) => Number(m.state) < 2)) throw new Error("stale read");
+    return r;
+  });
+  hooks.state(id, Number(inv.state), ms.map((m) => Number(m.state)));
   const containerAfter = await settled(
     async () => {
-      const v = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
+      const v = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [containerAddr] });
       if (v <= containerBefore) throw new Error("stale read");
       return v;
     },
-    12,
-  ).catch(() => ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] }));
-  return { invoiceId: id, ms: Math.round(performance.now() - t0), container, containerReceived: containerAfter - containerBefore };
+    15,
+  ).catch(() => ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [containerAddr] }));
+  return { invoiceId: id, ms: Math.round(performance.now() - t0), container: containerAddr, containerReceived: containerAfter - containerBefore };
 }
 
 export function fmtOkb(wei: bigint) {
