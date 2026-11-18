@@ -71,3 +71,7 @@ Re-run after the fix: **0 high, 0 medium, 4 low, 1 informational** (32 contracts
 External calls added in v2 are all `view` reads of TapeOut contracts (`factory.isCPU`, `processor.ownerOf`, `opener.accountOf`), compiled as `staticcall`, inside `nonReentrant` functions where funds move. A reverting `ownerOf` at release time cannot trap funds: the payout falls back to the original seller (tested). Not an audit.
 
 Re-run after the opened-container fallback and the `circuitStats` counters (same day): **0 high, 0 medium, 4 low, 1 informational**, unchanged. The new `opener.isOpened` read is a `view` call wrapped in `try`/`catch`, so a reverting opener counts as "not opened" and the release falls back to the circuit holder.
+
+### Re-run after the review fixes (18 Nov 2026)
+
+Changes: `fundInvoice` clears both cancel consents, new `revokeCancelConsent`, `circuitStats` counts funded invoices only (`fundedInvoices`, incremented in `fundInvoice`). Same command, Slither 0.11.6: 32 contracts, 102 detectors, 5 results. 0 high, 0 medium, 4 low (`timestamp` in `createInvoice`, `submitMilestone`, `fundInvoice`, `claimRefund`; intended due-date checks), 1 informational (`createInvoice` cyclomatic complexity 12). Unchanged from the previous v2 run.

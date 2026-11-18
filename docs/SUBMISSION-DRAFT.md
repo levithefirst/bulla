@@ -6,7 +6,7 @@ Placeholders are UPPER_CASE names in double angle brackets. Replace every one be
 
 **One-liner:** Freelancers send a milestone invoice, the client locks USDC on X Layer, and each release pays the freelancer's TapeOut circuit (its holder, or straight into the circuit's container if the freelancer opts in), with a public receipt anyone can open without a wallet.
 
-Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 freelancers found 29% of invoices were paid at least a day late (https://www.hellobonsai.com/blog/late-freelance-payment). Bulla flips the default. The client funds every milestone up front into an escrow contract on X Layer, the freelancer submits proof of delivery for each milestone, and the client releases each one. Anything not released by the due date is refunded to the client. Every invoice is bound to the freelancer's TapeOut circuit and verified on chain (only the circuit's holder can bill with it), and payments go to that circuit's holder or into its container, so the freelancer's receivables and payment history live with the circuit. The app is a static site built to be served from that container on DeWEB.
+Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 freelancers found 29% of invoices were paid at least a day late (https://www.hellobonsai.com/blog/late-freelance-payment). Bulla flips the default. The client funds every milestone up front into an escrow contract on X Layer, the freelancer submits proof of delivery for each milestone, and the client releases each one. Anything not released by the due date is refunded to the client. Every invoice is bound to the freelancer's TapeOut circuit and verified on chain (only the circuit's holder can bill with it), and payments go to that circuit's holder or into its container, so the freelancer's receivables and on-chain activity live with the circuit. The app is a static site built to be served from that container on DeWEB.
 
 ## 1. Try it in one tap
 
@@ -62,7 +62,7 @@ Not all logic runs in a circuit: escrow and state live in a companion Solidity c
 
 - **Revenue:** 0.5% (50 bps, fixed at deploy) on each successful milestone release. Refunds, arbiter refunds and cancels are free. No subscription. The fee is Bulla's own, not an X Layer or TapeOut protocol fee. Revenue to date: `<<REVENUE_TO_DATE_OR_NONE>>`.
 - **Why they pay:** the fee is smaller than the cost of one late invoice and is charged only when the freelancer gets paid; clients fund up front because the refund date is enforced by the contract.
-- **Why they stay:** the circuit carries a public, verifiable payment history (released milestones and volume on every receipt), repeat clients reuse the same flow, and receivables move with the circuit.
+- **Why they stay:** the circuit carries public on-chain activity (funded invoices, released milestones and volume on every receipt; activity, not a reputation score), repeat clients reuse the same flow, and receivables move with the circuit.
 
 ## 6. Built during the event
 
@@ -70,7 +70,7 @@ First commit: 14 Nov 2026 (`git log`, commit `de78f30`). All code and docs are n
 
 ## 7. Limits
 
-Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in and wallet payout is the default, because a container only works once opened (`open()`, 0.08 OKB) and withdrawing needs the holder to call `execute` with `EXEC_FEE()` attached (verified on chain, `docs/research.md` §9; a USDC withdrawal through `execute` has not been simulated end to end); releases to an unopened container fall back to the holder; the judge-mode gas key is a public, throwaway testnet key by design; judge mode uses labelled testnet stand-ins because TapeOut has no testnet deployment.
+Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in and wallet payout is the default, because a container only works once opened (`open()`, 0.08 OKB) and withdrawing needs the holder to call `execute` with `EXEC_FEE()` attached (verified on chain, `docs/research.md` §9; a USDC withdrawal through `execute` has not been simulated end to end); releases to an unopened container fall back to the holder; the judge-mode gas key is a public, throwaway testnet key by design; judge mode uses labelled testnet stand-ins because TapeOut has no testnet deployment. Without an arbiter, the buyer can refund every unreleased milestone after the due date, including milestones the seller already submitted, so the create form recommends an arbiter and a due date with review time. A release reverts if the payee cannot receive the token (for example a USDC-blacklisted address; the fee recipient too); the milestone then stays in escrow and is still refundable to the buyer after the due date. The on-chain activity counters (`circuitStats`) count funded invoices only, but a seller can fund invoices from a wallet they control, so they show activity, not reputation.
 
 ## The problem (approved citations only)
 
@@ -94,7 +94,7 @@ Source: https://web3.okx.com/xlayer/build-x-series (five criteria, re-read 18 No
 | Criterion | Where Bulla answers it |
 | --- | --- |
 | User Value and Commercial Potential | Cited late-payment pain; real multi-milestone escrow with an optional arbiter; 0.5% only on release; receipt share loop; `<<REAL_INVOICE_LINKS_OR_NONE_YET>>` |
-| Innovation | "Your TapeOut circuit is your business account": billing is gated by `ownerOf`, payouts follow the circuit or land in its container, and the circuit carries a public payment history |
+| Innovation | "Your TapeOut circuit is your business account": billing is gated by `ownerOf`, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity |
 | Ecosystem Integration | TapeOut processor, factory, opener and container reads on X Layer; DeWEB and the TapeKit gateway; native USDC; OKX Wallet and explorer |
 | Product Readiness and UX | One tap runs the full loop on X Layer testnet (`<<TESTNET_JUDGE_SECONDS>>` s); live mainnet escrow and receipts; 57 contract tests, 10 E2E tests, Slither notes |
 | Demo Video (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut) | `<<VIDEO_URL>>`, script in `docs/DEMO.md`: a live release before 0:10, the container receiving USDC on the explorer, a real mainnet invoice, the business model on screen |
@@ -105,3 +105,4 @@ Source: https://web3.okx.com/xlayer/build-x-series (five criteria, re-read 18 No
 - Whoever holds the TapeOut circuit controls its container and receives future releases. This is not safe if that wallet is stolen.
 - Seller actions (submit, cancel) stay with the address that created the invoice; only payouts follow the circuit.
 - The buyer can refund unreleased milestones after the due date even if they were submitted; sellers should set due dates with review time, or name an arbiter.
+- Cancel consent given on a draft is cleared when the buyer funds, and either party can withdraw its consent (`revokeCancelConsent`) while the invoice is open.

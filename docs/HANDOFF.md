@@ -5,6 +5,7 @@ Written 14 Nov 2026 at the end of the autonomous build, updated the same day aft
 ## v2 changes (18 Nov 2026)
 
 - **The contract changed; redeploy everything.** A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`); ignore it, do not link it. v2 has a different ABI and constructor.
+- **Review fixes, 18 Nov 2026 (ABI change): redeploy testnet.** `fundInvoice` now clears cancel consent given on the draft, `revokeCancelConsent(id)` is new, and `circuitStats` counts funded invoices only (field renamed `fundedInvoices`). The testnet contracts deployed earlier the same day (commit `1eef3e2`) predate this and do not match the web ABI: re-run `deploy:judge` then `deploy:testnet`, commit `deployments.json`, rebuild and re-host the judge site.
 - **New constructor:** `BullaEscrow(token, opener, factory, feeRecipient, feeBps, initialOwner)`. `opener` and `factory` are TapeOut's, immutable.
 
 | Chain | token | opener | factory | Who supplies them |
@@ -17,7 +18,7 @@ Written 14 Nov 2026 at the end of the autonomous build, updated the same day aft
 `feeBps` is 50 and `initialOwner` is the deployer on every chain.
 
 - **Container payout facts** (verified on chain by Grok Bot, `docs/research.md` §9, source `docs/planning/win-audit/onchain-checks.md`): the container must be **opened** (`opener.isOpened`; open it in the official app, `open()` costs 0.08 OKB) or it reverts `NotPaid()`. An opened container withdraws with ERC-6551 `execute(to, value, data, 0)` (selector `0x51945447`; operation 1 reverts `OnlyCall()`), called by the circuit holder with `EXEC_FEE()` attached as `msg.value` (0.0013 OKB read on 18 Nov 2026; always read it live) or it reverts `ProtocolFeeTooLow`. v2 therefore keeps "Pay into my TapeOut container" opt-in and pays the holder whenever the container is not opened. The receipt shows a "How to withdraw from your container" note (execute with `EXEC_FEE`, or the official https://www.tapeout.net/containers UI). A USDC withdrawal through `execute` was not simulated end to end: **UNKNOWN** until the first real withdrawal.
-- **The public X Layer RPC rejects `eth_getLogs`.** The seller history panel reads the on-chain `circuitStats` view instead; timeline tx links stay best effort.
+- **The public X Layer RPC rejects `eth_getLogs`.** The "On-chain activity" panel reads the on-chain `circuitStats` view instead; timeline tx links stay best effort.
 - **TapeSend** hub is live on X Layer (proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee`, implementation `0xdCC57797089eBD9f26e686379A4323f353a3F9C6`, per `onchain-checks.md`) but out of scope for v2; the seam is `web/src/lib/notify.ts`.
 - **v2 checks, 18 Nov 2026:** `npm test` 57 passing; `npm run e2e` 10 passing; judge mode 12 transactions, 664 ms in-app and 982 ms from the tap to Released on a local node (limit 10 s); Slither 0 high, 0 medium, 4 low, 1 informational. Testnet timing is still not measured.
 

@@ -20,7 +20,7 @@ The Demo Video is the fifth official judging criterion (https://web3.okx.com/xla
 | 2 to 3 | Tap. The judge page opens; two demo wallets appear | X Layer testnet | (silence, a click) | click **Try it now** |
 | 3 to 7 | Steps tick green: circuit minted (labelled "testnet stand-in for TapeOut"), container opened, invoice billed with the circuit, funded. The live badge goes Draft → Funded → Submitted | X Layer testnet | "The client locks the money in escrow. The freelancer delivers." | none |
 | 7 to 9 | Badge hits **Released**; timer shows "Done in X s"; "Container received 248.75 DemoUSD" | X Layer testnet | "Released. Paid. In seconds." | none (use the real measured number on screen; never say a number you did not measure) |
-| 9 to 13 | Click the **Client releases milestone 2** step's OKX Explorer link. The tx shows DemoUSD going to the container address | X Layer testnet · stand-in container | "Every step is an X Layer transaction, and the money lands in the freelancer's circuit container." | click the release step link |
+| 9 to 13 | Click the **Client releases milestone 2** step's "Explorer (may lag on testnet)" link; the tx shows DemoUSD going to the container address. If the testnet explorer says "not found", expand the step's **Receipt (read from the RPC)** instead (status Success, block, gas, from/to) | X Layer testnet · stand-in container | "Every step is an X Layer transaction, and the money lands in the freelancer's circuit container." | click the release step link |
 | 13 to 18 | Back to the app: **Open public receipt**. Milestones table, payout target = container, timeline, QR | X Layer testnet | "Anyone can check the receipt. No wallet, no login." | click **Open public receipt** |
 | 18 to 24 | Cut to the mainnet receipt (Released milestone, real USDC), then the explorer page of that release: **USDC transferred to the TapeOut container** | X Layer mainnet · real USDC | "Same flow on mainnet with real USDC, a real TapeOut circuit, and OKX Wallet." | switch tabs |
 | 24 to 30 | Title card over the receipt: "Bulla: milestone escrow where your TapeOut circuit is your business account. 0.5% only when you get paid." | X Layer mainnet | "This is Bulla." | none |
@@ -31,10 +31,16 @@ The Demo Video is the fifth official judging criterion (https://web3.okx.com/xla
 | --- | --- | --- |
 | 0:30 to 0:50 | Landing, "How it works" | "Late payment is routine. Bonsai's 2025 data on over 100,000 freelancers: 29% of invoices paid at least a day late. Remote: 85% of contractors are paid late at least sometimes." Show both sources on screen as captions with their URLs. |
 | 0:50 to 1:30 | Real mode, mainnet: **Create a milestone invoice**. Enter processor and circuit #ID: "You hold circuit #ID" appears with the container and its opened status; add three milestones; toggle "Pay into my TapeOut container"; add an arbiter | "Real milestones: the client funds them all up front, you deliver each one, they release each one. Only the circuit's holder can bill with it, checked on chain. An optional arbiter, accepted by the client, settles disputes and takes no fee." |
-| 1:30 to 1:55 | Receipt: share kit (QR, X, Telegram), seller history panel | "Who it is for: crypto-paid freelancers and small studios, and their clients. Every receipt is a link the client opens and can share, so each paid invoice brings a new client in. The circuit carries a public payment history." |
+| 1:30 to 1:55 | Receipt: share kit (QR, X, Telegram), the "On-chain activity" panel | "Who it is for: crypto-paid freelancers and small studios, and their clients. Every receipt is a link the client opens and can share, so each paid invoice brings a new client in. The circuit carries its on-chain activity: funded invoices and released volume." |
 | 1:55 to 2:10 | Fee line on the receipt | "Business model: 0.5% on each successful release. Refunds and cancels are free." |
 | 2:10 to 2:35 | Receipt **TapeOut binding and payout**; the "How to withdraw from your container" note; then the DeWEB gateway URL bar | "TapeOut does the work: ownerOf gates billing, the opener gives the container that receives payouts, the container withdraws with execute, and the app itself is served from the circuit's container on DeWEB." Mention TapeSend only as "next", never as shipped. |
 | 2:35 to 2:45 | Landing | "Next 90 days: real invoices, an audit, TapeSend notes. Bulla is unaudited, and whoever holds the circuit controls its container, so keep that wallet safe." |
+
+## Limits to say or caption honestly
+
+- Without an arbiter, the client can refund every unreleased milestone after the due date, even ones already submitted. Show the create form's "No arbiter set" notice next to the arbiter field.
+- A release reverts if the payee cannot receive the token (for example a USDC-blacklisted address); the money stays in escrow and is still refundable to the client.
+- "On-chain activity" counts funded invoices only and is not a reputation score.
 
 ## Moments to get right, mistakes to avoid
 

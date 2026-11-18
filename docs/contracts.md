@@ -85,6 +85,7 @@ The UI shows a refined status: Draft, Funded, Submitted (a delivery awaits relea
 | `arbiterRefund(id, i)` | arbiter | Funded, milestone Submitted | returns that milestone to the buyer, no fee |
 | `claimRefund(id)` | buyer | Funded, `now >= due` | returns every unresolved milestone, no fee; state Refunded |
 | `mutualCancel(id)` | seller or buyer | Draft or Funded | records consent; with both, Cancelled and the unresolved remainder returns to the buyer |
+| `revokeCancelConsent(id)` | seller or buyer who consented | Draft or Funded | withdraws that party's consent (`NoConsentToRevoke` if none) |
 | `setFeeRecipient(addr)` | owner | any | only owner power |
 | `getInvoice`, `getMilestones`, `payoutTarget`, `containerOpened`, `circuitStats`, `quoteRelease`, `invoiceCount`, `totalHeld` | anyone | any | views |
 
@@ -102,21 +103,24 @@ At 50 bps: a 250.000000 milestone pays 1.250000 fee and 248.750000 net. Fees app
 ## Accounting and on-chain history
 
 - `totalHeld` = sum of unresolved milestone amounts over Funded invoices. `token.balanceOf(escrow) >= totalHeld`, equal unless someone sends tokens directly (those are stuck; no sweep function by design).
-- `circuitStats(processor, circuitId)` counts invoices billed, milestones released and refunded, and gross released volume per circuit. The receipt's seller history reads it, because the public X Layer RPC rejects `eth_getLogs`.
+- `circuitStats(processor, circuitId)` counts **funded** invoices (`fundedInvoices`, incremented in `fundInvoice`; unfunded drafts are excluded), milestones released and refunded, and gross released volume per circuit. The receipt's "On-chain activity" panel reads it, because the public X Layer RPC rejects `eth_getLogs`. It is activity, not reputation: a seller can fund invoices from a wallet they control.
 
 ## Events
 
-`EscrowConfigured`, `InvoiceCreated`, `CircuitBound`, `MilestoneDefined`, `ArbiterProposed`, `InvoiceFunded`, `MilestoneSubmitted`, `MilestoneReleased(id, index, paidTo, net, fee, by)`, `FeePaid`, `MilestoneRefunded(id, index, amount, by)`, `InvoiceCompleted`, `Refunded`, `CancelConsentGiven`, `InvoiceCancelled`, `FeeRecipientUpdated`.
+`EscrowConfigured`, `InvoiceCreated`, `CircuitBound`, `MilestoneDefined`, `ArbiterProposed`, `InvoiceFunded`, `MilestoneSubmitted`, `MilestoneReleased(id, index, paidTo, net, fee, by)`, `FeePaid`, `MilestoneRefunded(id, index, amount, by)`, `InvoiceCompleted`, `Refunded`, `CancelConsentGiven`, `CancelConsentRevoked`, `InvoiceCancelled`, `FeeRecipientUpdated`.
 
 ## Custom errors
 
-`ZeroAddress`, `FeeTooHigh`, `UnsupportedToken`, `InvalidAmount`, `TransferShortfall`, `InvalidBuyer`, `InvalidArbiter`, `DueInPast`, `InvalidMilestones`, `LabelTooLong`, `NotTapeOutProcessor`, `NotCircuitHolder`, `MissingDeliveryHash`, `InvoiceNotFound`, `MilestoneNotFound`, `NotSeller`, `NotBuyer`, `NotArbiter`, `NotParty`, `ArbiterMismatch`, `WrongState`, `WrongMilestoneState`, `PastDue`, `NotYetDue`, `AlreadyConsented`, plus OpenZeppelin's `OwnableUnauthorizedAccount`, `ReentrancyGuardReentrantCall` and SafeERC20 errors. The web app maps them to plain English.
+`ZeroAddress`, `FeeTooHigh`, `UnsupportedToken`, `InvalidAmount`, `TransferShortfall`, `InvalidBuyer`, `InvalidArbiter`, `DueInPast`, `InvalidMilestones`, `LabelTooLong`, `NotTapeOutProcessor`, `NotCircuitHolder`, `MissingDeliveryHash`, `InvoiceNotFound`, `MilestoneNotFound`, `NotSeller`, `NotBuyer`, `NotArbiter`, `NotParty`, `ArbiterMismatch`, `WrongState`, `WrongMilestoneState`, `PastDue`, `NotYetDue`, `AlreadyConsented`, `NoConsentToRevoke`, plus OpenZeppelin's `OwnableUnauthorizedAccount`, `ReentrancyGuardReentrantCall` and SafeERC20 errors. The web app maps them to plain English.
 
 ## Safety properties (tested)
 
 - Every function that moves tokens is `nonReentrant` and writes state before transferring. A token that re-enters `releaseMilestone` or `claimRefund` reverts the whole transaction.
 - Each milestone pays out at most once; states only move forward.
 - The owner cannot fund, release, refund, cancel, or move funds.
+- Cancel consent cannot be carried from the draft into the funded invoice: `fundInvoice` clears both consents (emitting `CancelConsentRevoked`), so neither party can later cancel alone and claw back submitted milestones. Either party can withdraw its own consent with `revokeCancelConsent`.
+- A release reverts if the payee (or fee recipient) cannot receive the token, e.g. a USDC-blacklisted address. Nothing moves; the milestone stays unresolved and remains refundable to the buyer after the due date.
+- Without an arbiter, `claimRefund` after the due date returns submitted but unreleased milestones too.
 - A reverting or burned circuit cannot trap funds at release (payout falls back to the seller), and the time-lock refund never calls TapeOut.
 
 ## Fuzz and invariant tests

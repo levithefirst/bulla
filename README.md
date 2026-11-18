@@ -16,7 +16,7 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 | --- | --- |
 | `BullaEscrow` v2 (circuit-bound, 1 to 10 milestones, optional arbiter, container payout) | done; 57 Hardhat tests incl. seeded fuzz + invariant walks; Slither 0 high / 0 medium |
 | Judge mode ("Try it now": one tap, two milestones paid into a stand-in container on X Layer testnet) | done; local acceptance 12 txs in 0.7 s in-app (664 ms), 1.0 s tap to Released (982 ms) (limit 10 s); testnet deploy + gas tank pending (Grok Bot) |
-| Web app (landing, create with circuit check and milestones, receipt with seller history and share kit) | done; static relative-path build, light and dark, 375px to desktop |
+| Web app (landing, create with circuit check and milestones, receipt with on-chain activity panel and share kit) | done; static relative-path build, light and dark, 375px to desktop |
 | E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, 375px + keyboard, judge mode) | 10 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
 | X Layer testnet / mainnet deploy | v2 scripts ready, **not deployed** (needs a key); a superseded v1 escrow on mainnet is ignored |
 | TapeOut circuit + container | **not minted** (human, official UI) |
@@ -152,7 +152,7 @@ X Layer is the core loop: every lock, delivery and release is an X Layer transac
 | # | X Layer / OKX / TapeOut feature | What is wired | Where | Status |
 | --- | --- | --- | --- | --- |
 | 1 | **X Layer settlement** (mainnet 196, testnet 1952) | `BullaEscrow` holds funds and state on X Layer; receipts read straight from an X Layer RPC; the judge loop runs on testnet 1952 | `contracts/`, `web/src/config.ts`, `web/src/judge/` | Code and deploy scripts done; v2 deploys pending |
-| 2 | **TapeOut circuit binding** (SPEC B.1 to B.4) | `createInvoice` requires `factory.isCPU(processor)` and `processor.ownerOf(circuitId) == seller`; each release re-reads the holder; receipts show the `<#ID>.2.<cpu>.tape` name and the circuit's payment history | `contracts/contracts/BullaEscrow.sol`, `web/src/lib/circuit.ts`, `shared/tapeoutCore.ts` | Wired; official X Layer opener and factory hard-coded for 196; circuit mint pending (human) |
+| 2 | **TapeOut circuit binding** (SPEC B.1 to B.4) | `createInvoice` requires `factory.isCPU(processor)` and `processor.ownerOf(circuitId) == seller`; each release re-reads the holder; receipts show the `<#ID>.2.<cpu>.tape` name and the circuit's on-chain activity (funded invoices only) | `contracts/contracts/BullaEscrow.sol`, `web/src/lib/circuit.ts`, `shared/tapeoutCore.ts` | Wired; official X Layer opener and factory hard-coded for 196; circuit mint pending (human) |
 | 3 | **TapeOut container payout** (`opener.accountOf`) | Per-invoice opt-in: releases land in the circuit's ERC-6551 container | same | Wired; opt-in, pays the container only once opened (else the holder); withdraw with `execute` + `EXEC_FEE()` or tapeout.net |
 | 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts` | Package done; publish pending (human) |
 | 5 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to X Layer; "Get OKX Wallet" link | `web/src/lib/wallet.tsx` | Done (official provider-name doc not found; research §7) |
@@ -162,7 +162,7 @@ X Layer is the core loop: every lock, delivery and release is an X Layer transac
 How this maps to the five official judging criteria (https://web3.okx.com/xlayer/build-x-series):
 
 - **User Value and Commercial Potential.** Cited late-payment pain (`docs/SUBMISSION-DRAFT.md`); real milestones funded up front, an optional arbiter, 0.5% only per successful release (rows 1, 7).
-- **Innovation.** "Your TapeOut circuit is your business account": only the circuit's holder can bill with it, payouts follow the circuit or land in its container, and the circuit carries a public payment history (rows 2, 3).
+- **Innovation.** "Your TapeOut circuit is your business account": only the circuit's holder can bill with it, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity (rows 2, 3).
 - **Ecosystem Integration.** TapeOut processor, factory, opener and container reads on X Layer, DeWEB and the TapeKit gateway, native USDC, OKX Wallet and explorer (rows 1 to 7).
 - **Product Readiness and UX.** One tap runs a two-milestone escrow on X Layer testnet with an explorer link per step (local acceptance: 1.0 s, limit 10 s); receipts need no wallet; real mode uses OKX Wallet (rows 1, 5, 6).
 - **Demo Video** (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut). Script in `docs/DEMO.md`: a live release before 0:10, then the container receiving the payout on the explorer.
