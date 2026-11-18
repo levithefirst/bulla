@@ -49,6 +49,85 @@ function TankLine({ tick }: { tick: number }) {
   );
 }
 
+type TxReceipt = { status: Hex; blockNumber: Hex; gasUsed: Hex; from: Address; to: Address | null; contractAddress: Address | null };
+
+/**
+ * In-app receipt for one step, read straight from the RPC with eth_getTransactionReceipt. The testnet explorer
+ * can lag behind the chain (it shows "not found" for confirmed txs), so this is the source of truth here.
+ */
+function StepReceipt({ hash }: { hash: Hex }) {
+  const [open, setOpen] = useState(false);
+  const [r, setR] = useState<TxReceipt | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || r) return;
+    let live = true;
+    (async () => {
+      for (let i = 0; i < 5 && live; i++) {
+        try {
+          const got = (await client.request({ method: "eth_getTransactionReceipt", params: [hash] })) as TxReceipt | null;
+          if (got) return live && (setR(got), setErr(null));
+        } catch (e) {
+          if (live) setErr((e as Error).message ?? "RPC error");
+        }
+        await new Promise((res) => setTimeout(res, 800));
+      }
+      if (live) setErr((x) => x ?? "Receipt not returned by the RPC yet. Try again in a few seconds.");
+    })();
+    return () => {
+      live = false;
+    };
+  }, [open, r, hash]);
+  const ok = r ? BigInt(r.status) === 1n : null;
+  return (
+    <details className="jstep-receipt" data-testid="step-receipt" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Receipt (read from the RPC)</summary>
+      {!r && !err && <p className="muted small">Reading eth_getTransactionReceipt…</p>}
+      {!r && err && <p className="muted small">{err}</p>}
+      {r && (
+        <dl className="lines lines-tight">
+          <div>
+            <dt>Status</dt>
+            <dd data-testid="receipt-status" className={ok ? "check-ok" : undefined}>
+              {ok ? "Success" : "Reverted"}
+            </dd>
+          </div>
+          <div>
+            <dt>Block</dt>
+            <dd className="num" data-testid="receipt-block">
+              {BigInt(r.blockNumber).toString()}
+            </dd>
+          </div>
+          <div>
+            <dt>Gas used</dt>
+            <dd className="num" data-testid="receipt-gas">
+              {BigInt(r.gasUsed).toLocaleString("en-US")}
+            </dd>
+          </div>
+          <div>
+            <dt>From</dt>
+            <dd className="mono" title={r.from}>
+              {shortAddr(r.from)}
+            </dd>
+          </div>
+          <div>
+            <dt>To</dt>
+            <dd className="mono" title={r.to ?? r.contractAddress ?? ""}>
+              {r.to ? shortAddr(r.to) : r.contractAddress ? `new contract ${shortAddr(r.contractAddress)}` : "none"}
+            </dd>
+          </div>
+          <div>
+            <dt>Hash</dt>
+            <dd className="mono" title={hash}>
+              {shortAddr(hash)} <CopyButton value={hash} label="Transaction hash" />
+            </dd>
+          </div>
+        </dl>
+      )}
+    </details>
+  );
+}
+
 const ROLE_LABEL: Record<Role | "tank", string> = { freelancer: "Freelancer", client: "Client", tank: "Gas tank" };
 const FEE_BPS = 50; // judge escrow is deployed with 50 bps (contracts/scripts/deploy-judge.ts)
 const FEE_TOTAL = DEMO_MILESTONES.reduce((a, m) => a + (m.amount * BigInt(FEE_BPS)) / 10_000n, 0n);
@@ -208,18 +287,20 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
                   <span className="jstep-label">{s.label}</span>
                   <span className="jstep-meta">
                     <span className={`role-chip role-${s.role}`}>{ROLE_LABEL[s.role]}</span>
-                    {s.hash &&
-                      (explorerTx(s.hash) ? (
-                        <a className="mono" href={explorerTx(s.hash)!} target="_blank" rel="noreferrer" data-testid="step-tx" aria-label={`View transaction ${s.hash} on the OKX explorer`}>
-                          {shortAddr(s.hash)} on OKX Explorer
-                        </a>
-                      ) : (
-                        <span className="mono" data-testid="step-tx" title={s.hash}>
-                          tx {shortAddr(s.hash)}
-                        </span>
-                      ))}
+                    {s.hash && (
+                      <span className="mono" data-testid="step-tx" title={s.hash}>
+                        tx {shortAddr(s.hash)}
+                      </span>
+                    )}
+                    {s.hash && <CopyButton value={s.hash} label="Transaction hash" testid="step-copy-hash" />}
+                    {s.hash && explorerTx(s.hash) && (
+                      <a href={explorerTx(s.hash)!} target="_blank" rel="noreferrer" data-testid="step-explorer" aria-label={`View transaction ${s.hash} on the explorer (may lag on testnet)`}>
+                        {config.chain.id === 196 ? "OKX Explorer" : "Explorer (may lag on testnet)"}
+                      </a>
+                    )}
                     {s.note && <span className="muted">{s.note}</span>}
                   </span>
+                  {s.hash && s.status === "done" && <StepReceipt hash={s.hash} />}
                 </div>
               </li>
             ))}
