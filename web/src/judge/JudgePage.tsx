@@ -8,7 +8,7 @@ import { fmtAmount, shortAddr } from "../lib/format";
 import { StatusBadge } from "../components/Status";
 import { CopyButton } from "../components/Copy";
 import { loadBurners, newBurners, type Burners, type Role } from "./burners";
-import { DEMO_AMOUNT, DEMO_MILESTONES, fmtOkb, JudgeError, runDemo, STEPS, tankKey, tankStatus, type Step, type StepKey } from "./runDemo";
+import { DEMO_AMOUNT, DEMO_MILESTONES, fmtOkb, isDemoRunning, JudgeError, runDemo, STEPS, tankKey, tankStatus, type Step, type StepKey } from "./runDemo";
 
 /** Same rules as lib/invoice displayState, from the raw states the runner reads. */
 function judgeDisplay(state: number, ms: number[]): StateName {
@@ -182,6 +182,8 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   const [tick, setTick] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const started = useRef<number | null>(null);
+  // Synchronous guard: React state updates are async, so two taps in the same frame would both see running === false.
+  const runningRef = useRef(false);
   const bal = useBalances(burners, tick);
 
   useEffect(() => {
@@ -191,7 +193,8 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   }, [running]);
 
   const run = useCallback(async () => {
-    if (running) return;
+    if (running || runningRef.current || isDemoRunning()) return;
+    runningRef.current = true;
     setRunning(true);
     setSteps(fresh());
     setInvoice(null);
@@ -216,6 +219,7 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
     } catch (e) {
       setError(e as Error);
     } finally {
+      runningRef.current = false;
       setRunning(false);
       setTick((t) => t + 1);
     }
@@ -266,7 +270,7 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
       )}
       {error && (
         <div className="error" role="alert" data-testid={code === "tankEmpty" ? "judge-tank-empty" : "judge-error"}>
-          <strong>{code === "tankEmpty" ? "Demo gas tank empty. " : code === "cap" ? "Above the demo gas cap. " : code === "chain" ? "Wrong network. " : "The demo stopped. "}</strong>
+          <strong>{code === "tankEmpty" ? "Demo gas tank empty. " : code === "cap" ? "Above the demo gas cap. " : code === "chain" ? "Wrong network. " : code === "busy" ? "" : "The demo stopped. "}</strong>
           {error.message}
         </div>
       )}

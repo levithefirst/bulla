@@ -7,13 +7,14 @@
  * TapeOut has no testnet deployment, so the circuit, opener and factory are labelled stand-ins.
  * Each sender's transactions are submitted in nonce order; receipts are awaited in parallel.
  */
-import { createWalletClient, decodeEventLog, encodeFunctionData, erc20Abi, http, keccak256, maxUint256, parseUnits, toBytes, type Address, type Hex } from "viem";
+import { createClient, decodeEventLog, http, encodeFunctionData, erc20Abi, keccak256, maxUint256, parseUnits, toBytes, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { mockProcessorAbi } from "../abi/mockProcessor";
 import { config } from "../config";
 import { client } from "../lib/client";
 import { ethCall, waitForReceipt } from "../../../shared/rpc";
+import { heartbeatTabLock, NonceBook, releaseTabLock, sendRecovering, SingleFlight, TAB_LOCK_BEAT_MS, tryAcquireTabLock, type KV, type NonceCounter } from "../../../shared/judgeGuard";
 import type { Burners, Role } from "./burners";
 
 export const DEMO_MILESTONES = [
@@ -61,7 +62,7 @@ export const STEPS: Omit<Step, "status">[] = [
 
 export class JudgeError extends Error {
   constructor(
-    public code: "chain" | "notDeployed" | "tankMissing" | "tankEmpty" | "cap" | "tx",
+    public code: "chain" | "notDeployed" | "tankMissing" | "tankEmpty" | "cap" | "busy" | "tx",
     message: string,
   ) {
     super(message);
@@ -126,7 +127,7 @@ export async function tankStatus(): Promise<{ address: Address; balance: bigint;
   return { address: a, balance: b, perRun, runsLeft: perRun > 0n ? Number(b / perRun) : 0 };
 }
 
-export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoiceId: bigint; ms: number; container: Address; containerReceived: bigint }> {
+async function runDemoInner(burners: Burners, hooks: Hooks): Promise<{ invoiceId: bigint; ms: number; container: Address; containerReceived: bigint }> {
   const t0 = performance.now();
   // 1. Guards: testnet (or local CI) only, contracts present, tank configured, funded and under the per-run cap.
   if (!allowedChain()) throw new JudgeError("chain", `Judge mode runs only on X Layer testnet (chain 1952). This build targets ${config.chain.name} (${config.chain.id}).`);
@@ -139,18 +140,17 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   if (!tk) throw new JudgeError("tankMissing", "This build has no demo gas tank configured.");
 
   const chain = config.chain;
-  const transport = http(config.rpcUrl);
-  const tank = createWalletClient({ account: privateKeyToAccount(tk), chain, transport });
-  const fw = createWalletClient({ account: privateKeyToAccount(burners.freelancer.privateKey), chain, transport });
-  const cw = createWalletClient({ account: privateKeyToAccount(burners.client.privateKey), chain, transport });
+  const tankA = privateKeyToAccount(tk);
+  const fwA = privateKeyToAccount(burners.freelancer.privateKey);
+  const cwA = privateKeyToAccount(burners.client.privateKey);
 
   const gasPrice = bumped(await gasPriceNow());
   const need = gasPrice * GAS_UNITS_PER_ROLE;
   const [fb, cb, tb, tn, fn0, cn0] = await Promise.all([
     balance(burners.freelancer.address),
     balance(burners.client.address),
-    balance(tank.account.address),
-    nonceOf(tank.account.address),
+    balance(tankA.address),
+    nonceOf(tankA.address),
     nonceOf(burners.freelancer.address),
     nonceOf(burners.client.address),
   ]);
@@ -163,6 +163,37 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   if ((topUps[0] || topUps[1]) && tb < spend) {
     throw new JudgeError("tankEmpty", `Demo gas tank empty: it holds ${fmtOkb(tb)} testnet OKB and this run needs ${fmtOkb(spend)}. Nothing was sent. Try again later, or use your own wallet.`);
   }
+
+  // Fresh nonces for this run: the RPC's pending count, but never below (last nonce this tab used) + 1, because the
+  // load-balanced testnet RPC can lag. Every send takes the next counter value and records it in the tab's nonce book.
+  const tankN = nonceBook.counter(tankA.address, tn);
+  const fN = nonceBook.counter(burners.freelancer.address, fn0);
+  const cN = nonceBook.counter(burners.client.address, cn0);
+  // Broadcasts go through their own unbatched transport: the shared read client batches calls, and a node can reject a batch
+  // that carries several raw transactions (seen as intermittent "Missing or invalid parameters").
+  const sendClient = createClient({ chain, transport: http(config.rpcUrl, { timeout: 20_000 }) });
+  type Tx = { to: Address; data?: Hex; value?: bigint; gas: bigint };
+  // Per-sender lane: broadcasts leave in the order they were requested, so nonce n always reaches the node before n + 1
+  // (nodes with automine, like the local Hardhat node, can stall a transaction that arrives ahead of its predecessor).
+  const lanes = new Map<string, Promise<unknown>>();
+  const send = (acct: typeof tankA, counter: NonceCounter, t: Tx): Promise<Hex> => {
+    const prev = lanes.get(acct.address) ?? Promise.resolve();
+    const job = prev.catch(() => undefined).then(() => sendOne(acct, counter, t));
+    lanes.set(acct.address, job);
+    return job;
+  };
+  const sendOne = (acct: typeof tankA, counter: NonceCounter, t: Tx) =>
+    sendRecovering({
+      counter,
+      readPending: () => nonceOf(acct.address),
+      sign: async (nonce) => {
+        const raw = await acct.signTransaction({ type: "legacy", chainId: chain.id, to: t.to, data: t.data, value: t.value, gas: t.gas, gasPrice, nonce });
+        return { raw, hash: keccak256(raw) };
+      },
+      broadcast: (raw) => sendClient.request({ method: "eth_sendRawTransaction", params: [raw] }),
+      known: async (h) =>
+        (await client.request({ method: "eth_getTransactionReceipt", params: [h] })) != null || (await client.request({ method: "eth_getTransactionByHash", params: [h] })) != null,
+    });
 
   const label = (key: StepKey) => STEPS.find((s) => s.key === key)!.label;
   const submit = async (key: StepKey, role: Role | "tank", fn: () => Promise<Hex>) => {
@@ -193,8 +224,8 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
 
   // 2. Gas: both top-ups broadcast together up front (nonces assigned locally), receipts awaited together.
   const gasTxs = await Promise.all([
-    topUps[0] ? submit("gasFreelancer", "tank", () => tank.sendTransaction({ to: burners.freelancer.address, value: topUps[0], nonce: tn, gas: 21_000n, gasPrice })) : (skip("gasFreelancer", "already has gas"), null),
-    topUps[1] ? submit("gasClient", "tank", () => tank.sendTransaction({ to: burners.client.address, value: topUps[1], nonce: tn + (topUps[0] ? 1 : 0), gas: 21_000n, gasPrice })) : (skip("gasClient", "already has gas"), null),
+    topUps[0] ? submit("gasFreelancer", "tank", () => send(tankA, tankN, { to: burners.freelancer.address, value: topUps[0], gas: 21_000n })) : (skip("gasFreelancer", "already has gas"), null),
+    topUps[1] ? submit("gasClient", "tank", () => send(tankA, tankN, { to: burners.client.address, value: topUps[1], gas: 21_000n })) : (skip("gasClient", "already has gas"), null),
   ]);
   await Promise.all(gasTxs.filter((t): t is { key: StepKey; hash: Hex } => !!t).map(confirm));
 
@@ -208,14 +239,12 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
     client.request({ method: "eth_getBlockByNumber", params: ["latest", false] }) as Promise<{ timestamp: Hex }>,
   ]);
   const due = BigInt(now.timestamp) + 7n * 86_400n;
-  let fNonce = fn0;
-  let cNonce = cn0;
   const ZERO = "0x0000000000000000000000000000000000000000" as const;
 
   let container: Address | null = null;
   let containerBeforeP: Promise<bigint> | null = null;
   const freelancerFlow = async () => {
-    const mintTx = await submit("circuit", "freelancer", () => fw.sendTransaction({ to: processor, data: encodeFunctionData({ abi: mockProcessorAbi, functionName: "mint", args: [] }), nonce: fNonce++, gas: GAS.circuit, gasPrice }));
+    const mintTx = await submit("circuit", "freelancer", () => send(fwA, fN, { to: processor, data: encodeFunctionData({ abi: mockProcessorAbi, functionName: "mint", args: [] }), gas: GAS.circuit }));
     const r = await confirm(mintTx);
     let circuitId: bigint | null = null;
     for (const log of r.logs) {
@@ -248,11 +277,9 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
         },
       ],
     });
-    const openNonce = fNonce++;
-    const createNonce = fNonce++;
     const [openTx, createTx] = await Promise.all([
-      submit("open", "freelancer", () => fw.sendTransaction({ to: j.tapeout!.opener, data: encodeFunctionData({ abi: openerAbi, functionName: "open", args: [processor, cid] }), nonce: openNonce, gas: GAS.open, gasPrice })),
-      submit("create", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: createData, nonce: createNonce, gas: GAS.create, gasPrice })),
+      submit("open", "freelancer", () => send(fwA, fN, { to: j.tapeout!.opener, data: encodeFunctionData({ abi: openerAbi, functionName: "open", args: [processor, cid] }), gas: GAS.open })),
+      submit("create", "freelancer", () => send(fwA, fN, { to: j.escrow, data: createData, gas: GAS.create })),
     ]);
     const [, createRcpt] = await Promise.all([confirm(openTx), confirm(createTx)]);
     let id: bigint | null = null;
@@ -277,13 +304,13 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   const clientFlow = async (created: Promise<bigint>) => {
     const pre: Promise<unknown>[] = [];
     if (cBal >= DEMO_AMOUNT) skip("mint", "already holds DemoUSD");
-    else pre.push(confirm(await submit("mint", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: demoUsdAbi, functionName: "mint", args: [DEMO_AMOUNT] }), nonce: cNonce++, gas: GAS.mint, gasPrice }))));
+    else pre.push(confirm(await submit("mint", "client", () => send(cwA, cN, { to: j.token, data: encodeFunctionData({ abi: demoUsdAbi, functionName: "mint", args: [DEMO_AMOUNT] }), gas: GAS.mint }))));
     if (cAllow >= DEMO_AMOUNT) skip("approve", "allowance already set");
-    else pre.push(confirm(await submit("approve", "client", () => cw.sendTransaction({ to: j.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [j.escrow, maxUint256] }), nonce: cNonce++, gas: GAS.approve, gasPrice }))));
+    else pre.push(confirm(await submit("approve", "client", () => send(cwA, cN, { to: j.token, data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [j.escrow, maxUint256] }), gas: GAS.approve }))));
     const preAll = Promise.all(pre);
     preAll.catch(() => undefined);
     const id = await created;
-    const fundTx = await submit("fund", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("fundInvoice", [id, ZERO]), nonce: cNonce++, gas: GAS.fund, gasPrice }));
+    const fundTx = await submit("fund", "client", () => send(cwA, cN, { to: j.escrow, data: escrowCall("fundInvoice", [id, ZERO]), gas: GAS.fund }));
     await Promise.all([preAll, confirm(fundTx)]);
     hooks.state(id, 2, [0, 0]); // Funded: the fund receipt succeeded
     return id;
@@ -298,14 +325,14 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   // 4. Deliver both milestones together, then release both together. State changes below come from the confirmed receipts;
   //    the final read at the end checks them against the chain.
   const subs = await Promise.all([
-    submit("submit0", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), nonce: fNonce++, gas: GAS.submit, gasPrice })),
-    submit("submit1", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), nonce: fNonce++, gas: GAS.submit, gasPrice })),
+    submit("submit0", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), gas: GAS.submit })),
+    submit("submit1", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), gas: GAS.submit })),
   ]);
   await Promise.all(subs.map(confirm));
   hooks.state(id, 2, [1, 1]);
   const rels = await Promise.all([
-    submit("release0", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 0n]), nonce: cNonce++, gas: GAS.release, gasPrice })),
-    submit("release1", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 1n]), nonce: cNonce++, gas: GAS.release, gasPrice })),
+    submit("release0", "client", () => send(cwA, cN, { to: j.escrow, data: escrowCall("releaseMilestone", [id, 0n]), gas: GAS.release })),
+    submit("release1", "client", () => send(cwA, cN, { to: j.escrow, data: escrowCall("releaseMilestone", [id, 1n]), gas: GAS.release })),
   ]);
   await Promise.all(rels.map(confirm));
   hooks.state(id, 3, [2, 2]);
@@ -329,6 +356,41 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
     15,
   ).catch(() => ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [containerAddr] }));
   return { invoiceId: id, ms: Math.round(performance.now() - t0), container: containerAddr, containerReceived: containerAfter - containerBefore };
+}
+
+const flight = new SingleFlight();
+const nonceBook = new NonceBook();
+const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const lockKey = (b: Burners) => `bulla.judge.lock.${b.freelancer.address.toLowerCase()}`;
+const kv = (): KV | null => {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+};
+
+/** True while a run is active in this tab (synchronous, independent of React state). */
+export const isDemoRunning = () => flight.busy;
+
+/**
+ * Runs the one-tap demo. Single-flight per tab: a call made while a run is active returns that run's result and starts nothing,
+ * so two quick taps can never share wallets and nonce counters. A localStorage lease also stops a second tab that uses the
+ * same demo wallets ("A demo is already running in another tab.").
+ */
+export function runDemo(burners: Burners, hooks: Hooks) {
+  return flight.run(async () => {
+    const store = kv();
+    const k = lockKey(burners);
+    if (store && !tryAcquireTabLock(store, k, TAB_ID)) throw new JudgeError("busy", "A demo is already running in another tab.");
+    const beat = store ? setInterval(() => heartbeatTabLock(store, k, TAB_ID), TAB_LOCK_BEAT_MS) : null;
+    try {
+      return await runDemoInner(burners, hooks);
+    } finally {
+      if (beat) clearInterval(beat);
+      if (store) releaseTabLock(store, k, TAB_ID);
+    }
+  });
 }
 
 export function fmtOkb(wei: bigint) {

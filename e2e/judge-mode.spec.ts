@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 /**
  * Judge-mode acceptance: landing -> one tap -> lock, submit, approve, release -> Released, with a
@@ -92,4 +93,65 @@ test("advanced path keeps the own-wallet flow", async ({ page }) => {
   await expect(page.getByTestId("create-form")).toBeVisible();
   await page.getByTestId("connect-wallet").click();
   await expect(page.getByTestId("connector-okxWallet")).toContainText("Recommended on X Layer");
+});
+
+const STEP_KEYS = ["gasFreelancer", "gasClient", "circuit", "open", "mint", "approve", "create", "fund", "submit0", "submit1", "release0", "release1"];
+
+test("judge mode: a double tap on Run starts exactly one run (12 confirmed steps, no error)", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage(); // fresh burners: every step is a real tx
+  await page.goto("#/try");
+  const run = page.getByTestId("judge-run");
+  await run.dblclick();
+  // Extra taps in the same frame, and after the first render: all ignored while a run is active.
+  await page.evaluate(() => {
+    const b = document.querySelector('[data-testid="judge-run"]') as HTMLButtonElement;
+    b.click();
+    b.click();
+  });
+  await expect(run).toHaveText("Running…");
+  await expect(run).toBeDisabled();
+  await expect(page.getByTestId("judge-state")).toHaveText("Released", { timeout: MAX_MS });
+  await expect(page.getByTestId("judge-elapsed")).toHaveAttribute("data-ms", /^\d+$/);
+  for (const key of STEP_KEYS) await expect(page.getByTestId(`step-${key}`)).toHaveAttribute("data-status", "done");
+  await expect(page.getByTestId("step-tx")).toHaveCount(12);
+  await expect(page.getByTestId("judge-error")).toHaveCount(0);
+  await expect(page.getByTestId("judge-container-received")).toHaveText("Container received 248.75 DemoUSD");
+  await expect(run).toHaveText("Run it again");
+});
+
+test("judge mode: tapping 'Run it again' twice quickly runs once, with fresh nonces and no error", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await page.goto("#/try");
+  const run = page.getByTestId("judge-run");
+  await run.click();
+  await expect(page.getByTestId("judge-state")).toHaveText("Released", { timeout: MAX_MS });
+  await expect(run).toHaveText("Run it again");
+  await run.dblclick();
+  await expect(run).toBeDisabled();
+  await expect(page.getByTestId("judge-elapsed")).toHaveAttribute("data-ms", /^\d+$/, { timeout: MAX_MS });
+  await expect(page.getByTestId("judge-state")).toHaveText("Released");
+  // Second run reuses the wallets: each step is either confirmed or skipped (already has gas / DemoUSD / allowance), none failed.
+  for (const key of STEP_KEYS) await expect(page.getByTestId(`step-${key}`)).toHaveAttribute("data-status", /^(done|skipped)$/);
+  expect(await page.getByTestId("step-tx").count()).toBeGreaterThanOrEqual(9);
+  await expect(page.getByTestId("judge-error")).toHaveCount(0);
+});
+
+test("judge mode: a second tab with the same demo wallets is refused while another tab runs", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await page.goto("#/try");
+  await expect(page.getByTestId("judge-run")).toBeEnabled(); // the page is mounted, so the demo wallets exist
+  const freelancerKey = await page.evaluate(() => JSON.parse(localStorage.getItem("bulla.demo-only.testnet-burners.v1") ?? "{}").freelancer as string);
+  const lockKey = `bulla.judge.lock.${privateKeyToAccount(freelancerKey as Hex).address.toLowerCase()}`;
+  // Another tab holds a fresh lease for these wallets.
+  await page.evaluate(([k]) => localStorage.setItem(k, JSON.stringify({ owner: "other-tab", ts: Date.now() })), [lockKey]);
+  await page.getByTestId("judge-run").click();
+  await expect(page.getByTestId("judge-error")).toHaveText("A demo is already running in another tab.");
+  await expect(page.getByTestId("step-tx")).toHaveCount(0);
+  await expect(page.getByTestId("judge-run")).toBeEnabled();
+  // The other tab finishes (lease released): this tab can run, and releases its own lease afterwards.
+  await page.evaluate(([k]) => localStorage.removeItem(k), [lockKey]);
+  await page.getByTestId("judge-run").click();
+  await expect(page.getByTestId("judge-state")).toHaveText("Released", { timeout: MAX_MS });
+  await expect(page.getByTestId("judge-error")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(([k]) => localStorage.getItem(k), [lockKey])).toBeNull(); // released when the run returns
 });
