@@ -54,7 +54,10 @@ const pairs: [string, string, number, string][] = [
   ["surface", "text-secondary", 3, "neutral (Cancelled) timeline dot icon"],
   ["text-secondary", "surface", 3, "neutral (Cancelled) timeline dot on card"],
   ["disputed-text", "disputed-bg", 4.5, "field validation errors, wrong-network banner"],
-  ["pending-text", "pending-bg", 4.5, "warnings, mock banner, 'passed' tag"],
+  ["pending-text", "pending-bg", 4.5, "warnings, mock banner, 'passed' tag, stand-in labels"],
+  ["released-text", "released-bg", 4.5, "'You hold circuit #ID', 'Recommended', container received"],
+  ["text-secondary", "bg", 4.5, "milestone sub-lines, toggle hint, milestone action cards"],
+  ["on-accent", "accent", 4.5, "milestone number dots"],
   ...S.flatMap((s): [string, string, number, string][] => [
     [`${s}-text`, `${s}-bg`, 4.5, `${s} badge, notices`],
     ["on-status", `${s}-solid`, 4.5, `${s} timeline dot icon`],

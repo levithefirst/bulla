@@ -9,6 +9,16 @@ export const bullaEscrowAbi = [
       },
       {
         "internalType": "address",
+        "name": "opener_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "factory_",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
         "name": "feeRecipient_",
         "type": "address"
       },
@@ -29,6 +39,22 @@ export const bullaEscrowAbi = [
   {
     "inputs": [],
     "name": "AlreadyConsented",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "proposed",
+        "type": "address"
+      },
+      {
+        "internalType": "address",
+        "name": "accepted",
+        "type": "address"
+      }
+    ],
+    "name": "ArbiterMismatch",
     "type": "error"
   },
   {
@@ -54,7 +80,17 @@ export const bullaEscrowAbi = [
   },
   {
     "inputs": [],
+    "name": "InvalidArbiter",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "InvalidBuyer",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidMilestones",
     "type": "error"
   },
   {
@@ -69,8 +105,30 @@ export const bullaEscrowAbi = [
     "type": "error"
   },
   {
-    "inputs": [],
-    "name": "MissingContainerId",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "LabelTooLong",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "MilestoneNotFound",
     "type": "error"
   },
   {
@@ -80,7 +138,33 @@ export const bullaEscrowAbi = [
   },
   {
     "inputs": [],
+    "name": "NotArbiter",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotBuyer",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "processor",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "circuitId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "holder",
+        "type": "address"
+      }
+    ],
+    "name": "NotCircuitHolder",
     "type": "error"
   },
   {
@@ -91,6 +175,17 @@ export const bullaEscrowAbi = [
   {
     "inputs": [],
     "name": "NotSeller",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "processor",
+        "type": "address"
+      }
+    ],
+    "name": "NotTapeOutProcessor",
     "type": "error"
   },
   {
@@ -177,6 +272,17 @@ export const bullaEscrowAbi = [
   {
     "inputs": [
       {
+        "internalType": "enum BullaEscrow.MilestoneState",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "WrongMilestoneState",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "enum BullaEscrow.State",
         "name": "current",
         "type": "uint8"
@@ -189,6 +295,25 @@ export const bullaEscrowAbi = [
     "inputs": [],
     "name": "ZeroAddress",
     "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "arbiter",
+        "type": "address"
+      }
+    ],
+    "name": "ArbiterProposed",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -221,23 +346,29 @@ export const bullaEscrowAbi = [
       {
         "indexed": true,
         "internalType": "address",
-        "name": "seller",
+        "name": "processor",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "circuitId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "container",
         "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "bytes32",
-        "name": "deliveryHash",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "deliveryURI",
-        "type": "string"
+        "internalType": "bool",
+        "name": "payToContainer",
+        "type": "bool"
       }
     ],
-    "name": "DeliverySubmitted",
+    "name": "CircuitBound",
     "type": "event"
   },
   {
@@ -252,6 +383,18 @@ export const bullaEscrowAbi = [
       {
         "indexed": true,
         "internalType": "address",
+        "name": "opener",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "factory",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
         "name": "feeRecipient",
         "type": "address"
       },
@@ -262,7 +405,7 @@ export const bullaEscrowAbi = [
         "type": "uint16"
       },
       {
-        "indexed": true,
+        "indexed": false,
         "internalType": "address",
         "name": "owner",
         "type": "address"
@@ -278,6 +421,12 @@ export const bullaEscrowAbi = [
         "indexed": true,
         "internalType": "uint256",
         "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "index",
         "type": "uint256"
       },
       {
@@ -325,25 +474,13 @@ export const bullaEscrowAbi = [
         "type": "uint256"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "seller",
-        "type": "address"
-      },
-      {
         "indexed": false,
         "internalType": "uint256",
-        "name": "netToSeller",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "fee",
+        "name": "refundedToBuyer",
         "type": "uint256"
       }
     ],
-    "name": "FundsReleased",
+    "name": "InvoiceCancelled",
     "type": "event"
   },
   {
@@ -358,11 +495,17 @@ export const bullaEscrowAbi = [
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "refundedToBuyer",
+        "name": "releasedAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "refundedAmount",
         "type": "uint256"
       }
     ],
-    "name": "InvoiceCancelled",
+    "name": "InvoiceCompleted",
     "type": "event"
   },
   {
@@ -400,6 +543,12 @@ export const bullaEscrowAbi = [
       },
       {
         "indexed": false,
+        "internalType": "uint8",
+        "name": "milestoneCount",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
         "internalType": "uint64",
         "name": "dueTimestamp",
         "type": "uint64"
@@ -407,13 +556,7 @@ export const bullaEscrowAbi = [
       {
         "indexed": false,
         "internalType": "bytes32",
-        "name": "circuitContainerId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "deliveryHash",
+        "name": "termsHash",
         "type": "bytes32"
       },
       {
@@ -446,9 +589,151 @@ export const bullaEscrowAbi = [
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "arbiter",
+        "type": "address"
       }
     ],
     "name": "InvoiceFunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "label",
+        "type": "string"
+      }
+    ],
+    "name": "MilestoneDefined",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "by",
+        "type": "address"
+      }
+    ],
+    "name": "MilestoneRefunded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "paidTo",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "net",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "fee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "by",
+        "type": "address"
+      }
+    ],
+    "name": "MilestoneReleased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "deliveryHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "deliveryURI",
+        "type": "string"
+      }
+    ],
+    "name": "MilestoneSubmitted",
     "type": "event"
   },
   {
@@ -522,6 +807,68 @@ export const bullaEscrowAbi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "MAX_LABEL_BYTES",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MAX_MILESTONES",
+    "outputs": [
+      {
+        "internalType": "uint8",
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "arbiterRefund",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      }
+    ],
+    "name": "arbiterRelease",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -537,39 +884,66 @@ export const bullaEscrowAbi = [
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "buyer",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "token_",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "totalAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint64",
-        "name": "dueTimestamp",
-        "type": "uint64"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "deliveryHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "circuitContainerId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "string",
-        "name": "memo",
-        "type": "string"
+        "components": [
+          {
+            "internalType": "address",
+            "name": "buyer",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256[]",
+            "name": "amounts",
+            "type": "uint256[]"
+          },
+          {
+            "internalType": "string[]",
+            "name": "labels",
+            "type": "string[]"
+          },
+          {
+            "internalType": "uint64",
+            "name": "dueTimestamp",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "processor",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "circuitId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "payToContainer",
+            "type": "bool"
+          },
+          {
+            "internalType": "address",
+            "name": "arbiter",
+            "type": "address"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "termsHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "string",
+            "name": "memo",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct BullaEscrow.CreateParams",
+        "name": "p",
+        "type": "tuple"
       }
     ],
     "name": "createInvoice",
@@ -581,6 +955,19 @@ export const bullaEscrowAbi = [
       }
     ],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "factory",
+    "outputs": [
+      {
+        "internalType": "contract ITapeOutFactory",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -615,6 +1002,11 @@ export const bullaEscrowAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "acceptedArbiter",
+        "type": "address"
       }
     ],
     "name": "fundInvoice",
@@ -655,19 +1047,49 @@ export const bullaEscrowAbi = [
             "type": "address"
           },
           {
+            "internalType": "address",
+            "name": "arbiter",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "processor",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "circuitId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "container",
+            "type": "address"
+          },
+          {
+            "internalType": "bool",
+            "name": "payToContainer",
+            "type": "bool"
+          },
+          {
             "internalType": "uint256",
             "name": "totalAmount",
             "type": "uint256"
           },
           {
-            "internalType": "bytes32",
-            "name": "deliveryHash",
-            "type": "bytes32"
+            "internalType": "uint256",
+            "name": "releasedAmount",
+            "type": "uint256"
           },
           {
-            "internalType": "string",
-            "name": "deliveryURI",
-            "type": "string"
+            "internalType": "uint256",
+            "name": "refundedAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint8",
+            "name": "milestoneCount",
+            "type": "uint8"
           },
           {
             "internalType": "uint64",
@@ -686,11 +1108,6 @@ export const bullaEscrowAbi = [
           },
           {
             "internalType": "uint64",
-            "name": "submittedAt",
-            "type": "uint64"
-          },
-          {
-            "internalType": "uint64",
             "name": "closedAt",
             "type": "uint64"
           },
@@ -698,11 +1115,6 @@ export const bullaEscrowAbi = [
             "internalType": "enum BullaEscrow.State",
             "name": "state",
             "type": "uint8"
-          },
-          {
-            "internalType": "bytes32",
-            "name": "circuitContainerId",
-            "type": "bytes32"
           },
           {
             "internalType": "bool",
@@ -715,6 +1127,11 @@ export const bullaEscrowAbi = [
             "type": "bool"
           },
           {
+            "internalType": "bytes32",
+            "name": "termsHash",
+            "type": "bytes32"
+          },
+          {
             "internalType": "string",
             "name": "memo",
             "type": "string"
@@ -723,6 +1140,67 @@ export const bullaEscrowAbi = [
         "internalType": "struct BullaEscrow.Invoice",
         "name": "",
         "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "getMilestones",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "enum BullaEscrow.MilestoneState",
+            "name": "state",
+            "type": "uint8"
+          },
+          {
+            "internalType": "bytes32",
+            "name": "deliveryHash",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "string",
+            "name": "deliveryURI",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "label",
+            "type": "string"
+          },
+          {
+            "internalType": "uint64",
+            "name": "submittedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "uint64",
+            "name": "closedAt",
+            "type": "uint64"
+          },
+          {
+            "internalType": "address",
+            "name": "paidTo",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct BullaEscrow.Milestone[]",
+        "name": "ms",
+        "type": "tuple[]"
       }
     ],
     "stateMutability": "view",
@@ -756,7 +1234,39 @@ export const bullaEscrowAbi = [
   },
   {
     "inputs": [],
+    "name": "opener",
+    "outputs": [
+      {
+        "internalType": "contract ITapeOutOpener",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "payoutTarget",
     "outputs": [
       {
         "internalType": "address",
@@ -797,9 +1307,14 @@ export const bullaEscrowAbi = [
         "internalType": "uint256",
         "name": "id",
         "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
       }
     ],
-    "name": "releaseFunds",
+    "name": "releaseMilestone",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -832,6 +1347,11 @@ export const bullaEscrowAbi = [
         "type": "uint256"
       },
       {
+        "internalType": "uint256",
+        "name": "index",
+        "type": "uint256"
+      },
+      {
         "internalType": "bytes32",
         "name": "deliveryHash",
         "type": "bytes32"
@@ -842,7 +1362,7 @@ export const bullaEscrowAbi = [
         "type": "string"
       }
     ],
-    "name": "submitDelivery",
+    "name": "submitMilestone",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

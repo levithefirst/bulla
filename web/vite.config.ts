@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import fs from "node:fs";
 
 // Static export for DeWEB (TapeOut SiteRegistry) and any plain static host:
 // - base "./" so every asset URL is relative (TapeKit handbook §2: relative paths only)
@@ -15,6 +16,18 @@ export default defineConfig(({ mode }) => {
   // Hard guard: the demo gas-tank key is TESTNET-ONLY and must never ship in a mainnet build.
   if (!judgeBuild && env.VITE_DEMO_GAS_TANK_KEY) {
     throw new Error(`VITE_DEMO_GAS_TANK_KEY is set for a ${network} build. Judge mode is testnet-only; unset it.`);
+  }
+
+  // Hard guard: X Layer mainnet (196) never uses a TapeOut stand-in or override.
+  if (network === "xlayerMainnet") {
+    const overrides = Object.keys(env).filter((k) => /^VITE_(JUDGE_)?TAPEOUT_/.test(k) && env[k]);
+    if (overrides.length) throw new Error(`TapeOut overrides (${overrides.join(", ")}) are not allowed in a mainnet build.`);
+    const dep = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../contracts/deployments.json"), "utf8")).networks?.xlayerMainnet;
+    const official = { opener: "0x536add8f30f03b69f6fbf29d425a816a0dc50106", factory: "0x1f09daefa827f02cbb40967cc91b259763760761" };
+    const t = dep?.tapeout;
+    if (t && (t.standIn || String(t.opener).toLowerCase() !== official.opener || String(t.factory).toLowerCase() !== official.factory)) {
+      throw new Error("contracts/deployments.json xlayerMainnet.tapeout is not the official TapeOut opener/factory; refusing a mainnet build.");
+    }
   }
 
   return {

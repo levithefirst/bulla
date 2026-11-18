@@ -1,25 +1,37 @@
-import type { StateName } from "../lib/invoice";
+import type { MilestoneStateName, StateName } from "../lib/invoice";
 
 /** Theme status families (docs/design/color-theme.md) plus a neutral stone style. */
 export type StatusKind = "funded" | "pending" | "released" | "disputed" | "neutral";
 
 /**
- * Invoice state -> status style. Color always comes with the word and an icon.
- * - Draft:     pending  (waiting for the buyer's deposit)
- * - Funded:    funded   (money held in escrow)
- * - Submitted: funded   (money still held; delivery awaiting release)
- * - Released:  released (seal opened on purpose)
- * - Refunded:  disputed (time-lock refund: the deal did not complete)
- * - Cancelled: neutral  (both parties agreed; not a dispute)
+ * Invoice display state -> status style. Color always comes with the word and an icon.
+ * - Draft:           pending  (waiting for the buyer's deposit)
+ * - Funded:          funded   (money held in escrow)
+ * - Submitted:       funded   (money still held; a delivery awaits release)
+ * - Partly released: funded   (some milestones paid, the rest still held)
+ * - Released:        released (every milestone paid)
+ * - Completed:       released (settled; an arbiter refunded part)
+ * - Refunded:        disputed (time-lock refund of the unreleased remainder)
+ * - Cancelled:       neutral  (both parties agreed; not a dispute)
  */
 export const STATE_STATUS: Record<StateName, StatusKind> = {
   None: "neutral",
   Draft: "pending",
   Funded: "funded",
   Submitted: "funded",
+  "Partly released": "funded",
   Released: "released",
+  Completed: "released",
   Refunded: "disputed",
   Cancelled: "neutral",
+};
+
+/** Milestone state -> status style. */
+export const MILESTONE_STATUS: Record<MilestoneStateName, StatusKind> = {
+  Pending: "pending",
+  Submitted: "funded",
+  Released: "released",
+  Refunded: "disputed",
 };
 
 const paths: Record<StatusKind, JSX.Element> = {
@@ -57,6 +69,16 @@ export function StatusBadge({ state, testid }: { state: StateName; testid?: stri
   const kind = STATE_STATUS[state];
   return (
     <span className={`status status-${kind}`} data-status={kind}>
+      <StatusIcon kind={kind} />
+      <span data-testid={testid}>{state}</span>
+    </span>
+  );
+}
+
+export function MilestoneBadge({ state, testid }: { state: MilestoneStateName; testid?: string }) {
+  const kind = MILESTONE_STATUS[state];
+  return (
+    <span className={`status status-${kind} status-sm`} data-status={kind}>
       <StatusIcon kind={kind} />
       <span data-testid={testid}>{state}</span>
     </span>

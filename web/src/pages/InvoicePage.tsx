@@ -1,15 +1,29 @@
 import { useState, type ReactNode } from "react";
-import type { Address } from "viem";
 import { config, explorerAddress, explorerTx } from "../config";
-import { containerAddressOf, fmtAmount, fmtDuration, fmtTime, shortAddr, ZERO32 } from "../lib/format";
+import { fmtAmount, fmtDuration, fmtTime, shortAddr, ZERO32 } from "../lib/format";
 import { parseError } from "../lib/errors";
-import { NotConfiguredError, quoteFee, stateName, useChainNow, useEscrowInfo, useInvoice, useInvoiceTxs, useTokenInfo, type Invoice, type TxRef } from "../lib/invoice";
+import {
+  displayState,
+  milestoneStateName,
+  NotConfiguredError,
+  quoteFee,
+  useChainNow,
+  useEscrowInfo,
+  useInvoice,
+  useInvoiceTxs,
+  useSellerHistory,
+  useTokenInfo,
+  ZERO_ADDR,
+  type InvoiceData,
+  type TxRef,
+} from "../lib/invoice";
 import { useTapeName } from "../lib/tapeout";
 import { QueryProvider } from "../lib/query";
 import { navigate } from "../router";
 import { InvoiceActions } from "../components/InvoiceActions";
 import { Warnings } from "../components/Warnings";
-import { StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
+import { MilestoneBadge, StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
+import { ShareKit } from "../components/ShareKit";
 import { CopyButton } from "../components/Copy";
 import { Qr } from "../components/Qr";
 import { EmptyState } from "../components/Empty";
@@ -59,24 +73,29 @@ function TxLink({ tx }: { tx?: TxRef }) {
   );
 }
 
-function Timeline({ inv, txs }: { inv: Invoice; txs: TxRef[] }) {
-  const tx = (ev: string) => [...txs].reverse().find((t) => t.event === ev);
-  const final = stateName(inv.state);
-  // Each completed step takes the status style of the state it entered (see STATE_STATUS).
+function Timeline({ data, txs }: { data: InvoiceData; txs: TxRef[] }) {
+  const inv = data.invoice;
+  const tx = (ev: string, index?: number) => [...txs].reverse().find((t) => t.event === ev && (index === undefined || t.index === index));
+  const st = displayState(inv, data.milestones);
   const steps: { label: string; at: bigint; kind: StatusKind | null; tx?: TxRef; note?: string }[] = [
     { label: "Created (Draft)", at: inv.createdAt, kind: "pending", tx: tx("InvoiceCreated") },
-    { label: "Funded", at: inv.fundedAt, kind: inv.fundedAt > 0n ? "funded" : null, tx: tx("InvoiceFunded") },
-    { label: "Delivery submitted", at: inv.submittedAt, kind: inv.submittedAt > 0n ? "funded" : null, tx: tx("DeliverySubmitted") },
+    { label: "Funded (all milestones locked)", at: inv.fundedAt, kind: inv.fundedAt > 0n ? "funded" : null, tx: tx("InvoiceFunded") },
   ];
-  if (final === "Released") steps.push({ label: "Released to seller", at: inv.closedAt, kind: "released", tx: tx("FundsReleased") });
-  else if (final === "Refunded") steps.push({ label: "Refunded to buyer (time-lock)", at: inv.closedAt, kind: "disputed", tx: tx("Refunded") });
-  else if (final === "Cancelled") steps.push({ label: "Cancelled by both parties", at: inv.closedAt, kind: "neutral", tx: tx("InvoiceCancelled") });
-  else steps.push({ label: "Released or refunded", at: 0n, kind: null, note: `refund opens ${fmtTime(inv.dueTimestamp)}` });
+  data.milestones.forEach((m, i) => {
+    const name = `Milestone ${i + 1} · ${m.label}`;
+    if (m.submittedAt > 0n) steps.push({ label: `${name}: delivery submitted`, at: m.submittedAt, kind: "funded", tx: tx("MilestoneSubmitted", i) });
+    if (m.state === 2) steps.push({ label: `${name}: released`, at: m.closedAt, kind: "released", tx: tx("MilestoneReleased", i) });
+    if (m.state === 3) steps.push({ label: `${name}: refunded`, at: m.closedAt, kind: "disputed", tx: tx("MilestoneRefunded", i) });
+  });
+  if (st === "Refunded") steps.push({ label: "Refunded to buyer (time-lock)", at: inv.closedAt, kind: "disputed", tx: tx("Refunded") });
+  else if (st === "Cancelled") steps.push({ label: "Cancelled by both parties", at: inv.closedAt, kind: "neutral", tx: tx("InvoiceCancelled") });
+  else if (st === "Released" || st === "Completed") steps.push({ label: st === "Released" ? "Every milestone released" : "Completed", at: inv.closedAt, kind: "released", tx: tx("InvoiceCompleted") });
+  else steps.push({ label: "Remaining milestones released or refunded", at: 0n, kind: null, note: `refund opens ${fmtTime(inv.dueTimestamp)}` });
 
   return (
     <ol className="timeline" data-testid="timeline" aria-label="Invoice timeline">
-      {steps.map((s) => (
-        <li key={s.label} className={s.kind ? `done step-${s.kind}` : "todo"} data-status={s.kind ?? "todo"}>
+      {steps.map((s, k) => (
+        <li key={k} className={s.kind ? `done step-${s.kind}` : "todo"} data-status={s.kind ?? "todo"}>
           <span className="dot">{s.kind && <StatusIcon kind={s.kind} />}</span>
           <div className="step-body">
             <span className="step-label">{s.label}</span>
@@ -113,16 +132,55 @@ function OpenAnother() {
   );
 }
 
+function SellerHistoryPanel({ data, decimals, symbol }: { data: InvoiceData; decimals: number; symbol: string }) {
+  const h = useSellerHistory(data.invoice.processor, data.invoice.circuitId);
+  return (
+    <section className="card" aria-labelledby="history-title" data-testid="seller-history">
+      <h2 id="history-title">Seller history</h2>
+      <p className="muted small">
+        Circuit #{data.invoice.circuitId.toString()} on processor <span className="mono">{shortAddr(data.invoice.processor)}</span>, read from this escrow's events. No backend.
+      </p>
+      {h.isLoading && <p className="muted small">Reading events…</p>}
+      {h.isError && <p className="muted small">History unavailable (the RPC log query failed).</p>}
+      {h.data && (
+        <dl className="lines">
+          <div>
+            <dt>Invoices billed with this circuit</dt>
+            <dd className="num" data-testid="history-invoices">
+              {h.data.invoices}
+            </dd>
+          </div>
+          <div>
+            <dt>Milestones released</dt>
+            <dd className="num" data-testid="history-released">
+              {h.data.releasedMilestones}
+            </dd>
+          </div>
+          <div className="lines-total">
+            <dt>Total released</dt>
+            <dd className="num" data-testid="history-total">
+              {fmtAmount(h.data.releasedGross, decimals, symbol)}
+            </dd>
+          </div>
+          <div>
+            <dt>Milestones refunded</dt>
+            <dd className="num">{h.data.refundedMilestones}</dd>
+          </div>
+        </dl>
+      )}
+    </section>
+  );
+}
+
 function Receipt({ idParam }: { idParam: string }) {
   const target = useEscrowTarget();
   const id = /^\d+$/.test(idParam) && idParam !== "0" ? BigInt(idParam) : null;
-  const inv = useInvoice(id);
+  const q = useInvoice(id);
   const escrow = useEscrowInfo();
-  const token = useTokenInfo(inv.data?.token);
+  const token = useTokenInfo(q.data?.invoice.token);
   const now = useChainNow();
   const txs = useInvoiceTxs(id);
-  const containerAddr = inv.data ? containerAddressOf(inv.data.circuitContainerId) : null;
-  const tape = useTapeName(containerAddr as Address | null);
+  const tape = useTapeName(q.data ? q.data.invoice.container : null);
 
   if (id === null)
     return (
@@ -133,15 +191,15 @@ function Receipt({ idParam }: { idParam: string }) {
         </EmptyState>
       </div>
     );
-  if (inv.isLoading) return <ReceiptSkeleton label={`Reading invoice #${id} from ${config.chain.name}`} />;
-  if (inv.isError) {
-    const notConfigured = inv.error instanceof NotConfiguredError;
-    const notFound = !notConfigured && (String(inv.error).includes("InvoiceNotFound") || String(inv.error).includes("not found"));
+  if (q.isLoading) return <ReceiptSkeleton label={`Reading invoice #${id} from ${config.chain.name}`} />;
+  if (q.isError) {
+    const notConfigured = q.error instanceof NotConfiguredError;
+    const notFound = !notConfigured && (String(q.error).includes("InvoiceNotFound") || String(q.error).includes("not found"));
     return (
       <div className="narrow">
         {notConfigured ? (
           <EmptyState title="Escrow not deployed yet" testid="receipt-error">
-            <p className="muted">{(inv.error as Error).message}</p>
+            <p className="muted">{(q.error as Error).message}</p>
             <a className="btn" href="#/">
               Back home
             </a>
@@ -154,10 +212,10 @@ function Receipt({ idParam }: { idParam: string }) {
         ) : (
           <EmptyState title="Could not read this invoice" testid="receipt-error" tone="error">
             <p>
-              RPC error from <span className="mono">{config.rpcUrl}</span>: {parseError(inv.error)}
+              RPC error from <span className="mono">{config.rpcUrl}</span>: {parseError(q.error)}
             </p>
             <p className="muted">Nothing is shown as success when the chain cannot be read.</p>
-            <button className="btn" onClick={() => inv.refetch()}>
+            <button className="btn" onClick={() => q.refetch()}>
               Retry
             </button>
           </EmptyState>
@@ -166,10 +224,13 @@ function Receipt({ idParam }: { idParam: string }) {
     );
   }
 
-  const i = inv.data!;
+  const data = q.data!;
+  const i = data.invoice;
+  const ms = data.milestones;
   const t = token.data;
   const feeBps = escrow.data?.feeBps ?? config.feeBpsHint;
-  const { fee, net } = quoteFee(i.totalAmount, feeBps);
+  const totalFee = ms.reduce((a, m) => a + quoteFee(m.amount, feeBps).fee, 0n);
+  const held = i.state === 2 ? ms.filter((m) => m.state < 2).reduce((a, m) => a + m.amount, 0n) : 0n;
   const amt = (v: bigint) =>
     t ? (
       <>
@@ -178,11 +239,13 @@ function Receipt({ idParam }: { idParam: string }) {
     ) : (
       <span className="skel-inline" aria-label="loading" />
     );
-  const state = stateName(i.state);
+  const state = displayState(i, ms);
   const chainNow = now.data ?? BigInt(Math.floor(Date.now() / 1000));
   const duePassed = chainNow >= i.dueTimestamp;
   const link = window.location.href;
   const escrowAddr = escrow.data?.address ?? target.address;
+  const standIn = target.kind === "judge" || !!config.tapeout?.standIn;
+  const hasArbiter = i.arbiter !== ZERO_ADDR;
 
   return (
     <div className="receipt-layout">
@@ -206,7 +269,20 @@ function Receipt({ idParam }: { idParam: string }) {
             {amt(i.totalAmount)}
           </p>
           <p className="muted">
-            Seller receives <span className="num strong">{amt(net)}</span> on release, after a <span className="num">{(feeBps / 100).toFixed(2)}%</span> fee.
+            {ms.length} milestone{ms.length > 1 ? "s" : ""}, funded up front. Released <span className="num strong">{amt(i.releasedAmount)}</span>
+            {i.refundedAmount > 0n && (
+              <>
+                {" "}
+                · refunded <span className="num strong">{amt(i.refundedAmount)}</span>
+              </>
+            )}
+            {held > 0n && (
+              <>
+                {" "}
+                · held in escrow <span className="num strong">{amt(held)}</span>
+              </>
+            )}
+            .
           </p>
         </div>
 
@@ -215,9 +291,7 @@ function Receipt({ idParam }: { idParam: string }) {
             <dt>Due / refund time-lock</dt>
             <dd>
               <span className="num">{fmtTime(i.dueTimestamp)}</span>
-              <span className="fact-sub">
-                {duePassed ? <span className="tag">passed</span> : <span className="muted">in {fmtDuration(Number(i.dueTimestamp - chainNow))}</span>}
-              </span>
+              <span className="fact-sub">{duePassed ? <span className="tag">passed</span> : <span className="muted">in {fmtDuration(Number(i.dueTimestamp - chainNow))}</span>}</span>
             </dd>
           </div>
           <div>
@@ -243,74 +317,113 @@ function Receipt({ idParam }: { idParam: string }) {
           </div>
         </dl>
 
-        <h2 className="section-h">Amounts</h2>
+        <h2 className="section-h">Milestones</h2>
+        <div className="table-wrap">
+          <table className="ms-table" data-testid="milestones">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Milestone</th>
+                <th scope="col" className="r">
+                  Amount
+                </th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ms.map((m, k) => (
+                <tr key={k} data-testid={`ms-row-${k}`}>
+                  <td className="num">{k + 1}</td>
+                  <td>
+                    <span className="ms-label">{m.label}</span>
+                    {m.deliveryHash !== ZERO32 && (
+                      <span className="ms-sub">
+                        delivery <span className="mono" data-testid={`delivery-hash-value-${k}`} title={m.deliveryHash}>{m.deliveryHash}</span>
+                        <CopyButton value={m.deliveryHash} label={`Copy milestone ${k + 1} delivery hash`} />
+                      </span>
+                    )}
+                    {m.deliveryURI && (
+                      <span className="ms-sub break">
+                        {/^https?:\/\//.test(m.deliveryURI) ? (
+                          <a href={m.deliveryURI} target="_blank" rel="noreferrer noopener">
+                            {m.deliveryURI}
+                          </a>
+                        ) : (
+                          <span className="mono">{m.deliveryURI}</span>
+                        )}
+                      </span>
+                    )}
+                    {m.state === 2 && m.paidTo !== ZERO_ADDR && (
+                      <span className="ms-sub">
+                        paid to{" "}
+                        <ExtLink href={explorerAddress(m.paidTo)} label={`Milestone ${k + 1} payee on explorer`}>
+                          <span className="mono">{shortAddr(m.paidTo)}</span>
+                        </ExtLink>
+                        {m.paidTo.toLowerCase() === i.container.toLowerCase() && " (TapeOut container)"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="num r">{amt(m.amount)}</td>
+                  <td>
+                    <MilestoneBadge state={milestoneStateName(m.state)} testid={`ms-state-${k}`} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <dl className="lines">
           <div>
-            <dt>Escrowed</dt>
-            <dd className="num">{amt(i.totalAmount)}</dd>
-          </div>
-          <div>
-            <dt>Fee on release ({(feeBps / 100).toFixed(2)}%)</dt>
+            <dt>Fee per release ({(feeBps / 100).toFixed(2)}%), all milestones</dt>
             <dd className="num" data-testid="fee">
-              {amt(fee)}
+              {amt(totalFee)}
             </dd>
           </div>
           <div className="lines-total">
-            <dt>Seller receives on release</dt>
+            <dt>Paid out if every milestone is released</dt>
             <dd className="num" data-testid="net">
-              {amt(net)}
+              {amt(i.totalAmount - totalFee)}
             </dd>
           </div>
         </dl>
-        <p className="muted small">Refunds and mutual cancels return the full amount with no fee.</p>
+        <p className="muted small">Refunds and mutual cancels return the unreleased amount with no fee.</p>
 
-        <h2 className="section-h">Escrow record</h2>
+        <h2 className="section-h">TapeOut binding and payout</h2>
+        {standIn && (
+          <p className="tag tag-demo" data-testid="standin-label">
+            Testnet stand-in for TapeOut (TapeOut has no testnet deployment)
+          </p>
+        )}
         <dl className="record">
           <div>
-            <dt>Circuit container id</dt>
+            <dt>Payout target</dt>
             <dd>
-              <Value v={i.circuitContainerId} label="circuit container id" testid="container-id" kind="hash" />
-              {containerAddr && (
-                <span className="fact-sub">
-                  Container <ExtLink href={explorerAddress(containerAddr)} label="View container on explorer"><span className="mono">{shortAddr(containerAddr)}</span></ExtLink>
-                </span>
-              )}
+              <Value v={data.payoutTarget} label="payout target" testid="payout-target" />
+              <span className="fact-sub muted">{i.payToContainer ? "The seller's TapeOut container (follows the circuit)." : "The current holder of the circuit (re-checked at every release)."}</span>
             </dd>
           </div>
-          {tape.data && (
-            <div>
-              <dt>Seller TapeOut name</dt>
-              <dd>
-                <span className="mono">{tape.data.name}</span>
-                <span className="fact-sub muted">
-                  circuit #{tape.data.circuitId.toString()} on processor {tape.data.processorNumber}
-                </span>
-              </dd>
-            </div>
-          )}
           <div>
-            <dt>Delivery hash</dt>
+            <dt>Circuit</dt>
             <dd>
-              {i.deliveryHash === ZERO32 ? (
-                <span className="muted" data-testid="delivery-hash-value">
-                  None yet
-                </span>
-              ) : (
-                <Value v={i.deliveryHash} label="delivery hash" testid="delivery-hash-value" kind="hash" />
-              )}
+              <span className="mono">#{i.circuitId.toString()}</span> on processor <Value v={i.processor} label="processor address" testid="processor" />
+              {tape.data && <span className="fact-sub mono">{tape.data.name}</span>}
             </dd>
           </div>
-          {i.deliveryURI && (
+          <div>
+            <dt>Container (ERC-6551)</dt>
+            <dd>
+              <Value v={i.container} label="container address" testid="container-address" />
+            </dd>
+          </div>
+          <div>
+            <dt>Arbiter</dt>
+            <dd data-testid="arbiter">{hasArbiter ? <Value v={i.arbiter} label="arbiter address" /> : <span className="muted">None. Disputes end at the time-lock or a mutual cancel.</span>}</dd>
+          </div>
+          {i.termsHash !== ZERO32 && (
             <div>
-              <dt>Delivery link</dt>
-              <dd className="break">
-                {/^https?:\/\//.test(i.deliveryURI) ? (
-                  <a href={i.deliveryURI} target="_blank" rel="noreferrer noopener">
-                    {i.deliveryURI}
-                  </a>
-                ) : (
-                  <span className="mono">{i.deliveryURI}</span>
-                )}
+              <dt>Agreed scope hash</dt>
+              <dd>
+                <Value v={i.termsHash} label="scope hash" kind="hash" />
               </dd>
             </div>
           )}
@@ -333,7 +446,7 @@ function Receipt({ idParam }: { idParam: string }) {
         </dl>
 
         <h2 className="section-h">Timeline</h2>
-        <Timeline inv={i} txs={txs.data ?? []} />
+        <Timeline data={data} txs={txs.data ?? []} />
         {txs.isError && <p className="muted small">Transaction links unavailable (the RPC log query failed). Times above come from contract state.</p>}
 
         <footer className="receipt-foot">
@@ -347,20 +460,9 @@ function Receipt({ idParam }: { idParam: string }) {
       </article>
 
       <aside className="side no-print" aria-label="Receipt actions">
-        {t && escrow.data && <InvoiceActions inv={i} token={t} escrow={escrow.data} chainNow={chainNow} />}
-        <section className="card share" aria-labelledby="share-title">
-          <h2 id="share-title">Share this receipt</h2>
-          <p className="muted small">Anyone with the link can read it. No wallet needed.</p>
-          <div className="share-qr">
-            <Qr value={link} size={152} label={`QR code linking to invoice ${i.id} receipt`} />
-          </div>
-          <div className="row">
-            <CopyButton value={link} label="Copy receipt link" text="Copy link" testid="copy-link" />
-            <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>
-              Print
-            </button>
-          </div>
-        </section>
+        {t && escrow.data && <InvoiceActions data={data} token={t} escrow={escrow.data} chainNow={chainNow} />}
+        <ShareKit link={link} invoiceId={i.id} memo={i.memo} amount={t ? fmtAmount(i.totalAmount, t.decimals, t.symbol) : ""} chainName={config.chain.name} />
+        {t && <SellerHistoryPanel data={data} decimals={t.decimals} symbol={t.symbol} />}
         <Warnings />
       </aside>
     </div>

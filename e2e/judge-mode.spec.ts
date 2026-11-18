@@ -25,6 +25,10 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
   const wallMs = Date.now() - t0;
   // Each status was read from chain as it happened: Funded (locked) -> Submitted -> Released.
   await expect(page.getByTestId("judge-history")).toHaveText(/Draft.*Funded.*Submitted.*Released/);
+  // The payout lands in the stand-in TapeOut container of the circuit the Freelancer minted.
+  await expect(page.getByTestId("judge-container")).toContainText("Testnet stand-in for TapeOut");
+  await expect(page.getByTestId("judge-container-received")).toHaveText("Container received 248.75 DemoUSD");
+  await expect(page.getByTestId("tank-balance")).toHaveText(/^\d/);
 
   const elapsed = page.getByTestId("judge-elapsed");
   await expect(elapsed).toHaveAttribute("data-ms", /^\d+$/);
@@ -34,14 +38,14 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
   expect(wallMs).toBeLessThan(MAX_MS);
 
   // Every step is a real tx with a link (fresh browser => fresh burners => no skipped steps).
-  for (const key of ["gasFreelancer", "gasClient", "mint", "approve", "create", "fund", "submit", "release"]) {
+  for (const key of ["gasFreelancer", "gasClient", "circuit", "mint", "approve", "create", "fund", "submit0", "submit1", "release0", "release1"]) {
     const step = page.getByTestId(`step-${key}`);
     await expect(step).toHaveAttribute("data-status", "done");
     await expect(step.getByTestId("step-tx")).toContainText(/0x[0-9a-f]{4}/i);
   }
   if (TESTNET) {
     const hrefs = await page.getByTestId("step-tx").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href));
-    expect(hrefs).toHaveLength(8);
+    expect(hrefs).toHaveLength(11);
     for (const h of hrefs) expect(h).toMatch(/^https:\/\/www\.okx\.com\/web3\/explorer\/xlayer-test\/tx\/0x[0-9a-f]{64}$/);
   }
 
@@ -50,6 +54,9 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
   await expect(page.getByTestId("receipt")).toBeVisible();
   await expect(page.getByTestId("state")).toHaveText("Released");
   await expect(page.getByText("Demo escrow · DemoUSD, no value")).toBeVisible();
+  await expect(page.getByTestId("ms-state-0")).toHaveText("Released");
+  await expect(page.getByTestId("ms-state-1")).toHaveText("Released");
+  await expect(page.getByTestId("standin-label")).toBeVisible();
 });
 
 test("judge mode: an empty gas tank shows a clear message and sends nothing", async ({ browser }) => {

@@ -40,6 +40,13 @@ const dep = resolveDeployment(deployments as DeploymentsFile, networkKey, {
   judgeEscrow: import.meta.env.VITE_JUDGE_ESCROW_ADDRESS,
   judgeToken: import.meta.env.VITE_JUDGE_TOKEN,
   judgeDeployBlock: import.meta.env.VITE_JUDGE_DEPLOY_BLOCK,
+  // TapeOut overrides are for localhost / testnet stand-ins only; resolveDeployment throws on mainnet.
+  tapeoutOpener: import.meta.env.VITE_TAPEOUT_OPENER,
+  tapeoutFactory: import.meta.env.VITE_TAPEOUT_FACTORY,
+  tapeoutProcessor: import.meta.env.VITE_TAPEOUT_PROCESSOR,
+  judgeOpener: import.meta.env.VITE_JUDGE_TAPEOUT_OPENER,
+  judgeFactory: import.meta.env.VITE_JUDGE_TAPEOUT_FACTORY,
+  judgeProcessor: import.meta.env.VITE_JUDGE_TAPEOUT_PROCESSOR,
 });
 
 const chain = CHAINS[networkKey];
@@ -54,6 +61,8 @@ export const config = {
   tokenSymbolHint: dep.tokenSymbol,
   feeBpsHint: dep.feeBps,
   deployBlock: import.meta.env.VITE_DEPLOY_BLOCK ? BigInt(import.meta.env.VITE_DEPLOY_BLOCK) : dep.deployBlock,
+  /** TapeOut contracts for the real-token escrow: official on 196, stand-ins on testnet/local. */
+  tapeout: dep.tapeout,
   mock: import.meta.env.VITE_MOCK === "1",
   /**
    * Judge mode: one-tap testnet demo with browser burner keys. Compiled in only for

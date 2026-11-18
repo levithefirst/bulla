@@ -6,35 +6,71 @@ import { client } from "./client";
 import { ethCall, getLogs, latestTimestamp } from "../../../shared/rpc";
 import { MOCK_INVOICES, MOCK_TOKEN } from "./mock";
 import { useEscrowTarget, type EscrowTarget } from "./escrowTarget";
+import { assertOfficialTapeOut } from "../../../shared/deployments";
 
-export const STATE_NAMES = ["None", "Draft", "Funded", "Submitted", "Released", "Refunded", "Cancelled"] as const;
-export type StateName = (typeof STATE_NAMES)[number];
+/** Contract invoice states (BullaEscrow v2). */
+export const STATE_NAMES = ["None", "Draft", "Funded", "Completed", "Refunded", "Cancelled"] as const;
+export type ContractStateName = (typeof STATE_NAMES)[number];
+/** What a badge shows: contract state refined by milestone progress. */
+export type StateName = "None" | "Draft" | "Funded" | "Submitted" | "Partly released" | "Released" | "Completed" | "Refunded" | "Cancelled";
+export const MILESTONE_STATES = ["Pending", "Submitted", "Released", "Refunded"] as const;
+export type MilestoneStateName = (typeof MILESTONE_STATES)[number];
 
 export type Invoice = {
   id: bigint;
   seller: Address;
   buyer: Address;
   token: Address;
+  arbiter: Address;
+  processor: Address;
+  circuitId: bigint;
+  container: Address;
+  payToContainer: boolean;
   totalAmount: bigint;
-  deliveryHash: Hex;
-  deliveryURI: string;
+  releasedAmount: bigint;
+  refundedAmount: bigint;
+  milestoneCount: number;
   dueTimestamp: bigint;
   createdAt: bigint;
   fundedAt: bigint;
-  submittedAt: bigint;
   closedAt: bigint;
   state: number;
-  circuitContainerId: Hex;
   sellerCancelConsent: boolean;
   buyerCancelConsent: boolean;
+  termsHash: Hex;
   memo: string;
 };
 
-export type TokenInfo = { address: Address; symbol: string; decimals: number };
-export type EscrowInfo = { address: Address; feeBps: number; feeRecipient: Address; token: Address };
-export type TxRef = { event: string; hash: Hex; blockNumber: bigint };
+export type Milestone = {
+  amount: bigint;
+  state: number;
+  deliveryHash: Hex;
+  deliveryURI: string;
+  label: string;
+  submittedAt: bigint;
+  closedAt: bigint;
+  paidTo: Address;
+};
 
-export const stateName = (s: number): StateName => STATE_NAMES[s] ?? "None";
+export type InvoiceData = { invoice: Invoice; milestones: Milestone[]; payoutTarget: Address };
+
+export const ZERO_ADDR = "0x0000000000000000000000000000000000000000" as Address;
+export const milestoneStateName = (s: number): MilestoneStateName => MILESTONE_STATES[s] ?? "Pending";
+
+/** Badge status: Draft, Funded, Submitted (a delivery awaits release), Partly released, Released (all paid), Completed (settled with some refunded), Refunded, Cancelled. */
+export function displayState(inv: Invoice, ms: Milestone[]): StateName {
+  const c = STATE_NAMES[inv.state] ?? "None";
+  if (c === "Completed") return inv.refundedAmount === 0n ? "Released" : "Completed";
+  if (c !== "Funded") return c;
+  if (ms.some((m) => m.state === 1)) return "Submitted";
+  if (ms.some((m) => m.state === 2 || m.state === 3)) return "Partly released";
+  return "Funded";
+}
+
+export type TokenInfo = { address: Address; symbol: string; decimals: number };
+export type EscrowInfo = { address: Address; feeBps: number; feeRecipient: Address; token: Address; opener: Address; factory: Address };
+export type TxRef = { event: string; hash: Hex; blockNumber: bigint; index?: number };
+
 
 export class NotConfiguredError extends Error {}
 
@@ -48,14 +84,19 @@ export function useEscrowInfo() {
   return useQuery({
     queryKey: ["escrow", t.address],
     queryFn: async (): Promise<EscrowInfo> => {
-      if (config.mock) return { address: "0x000000000000000000000000000000000000b011", feeBps: 50, feeRecipient: "0x000000000000000000000000000000000000fee5", token: MOCK_TOKEN.address };
+      if (config.mock)
+        return { address: "0x000000000000000000000000000000000000b011", feeBps: 50, feeRecipient: "0x000000000000000000000000000000000000fee5", token: MOCK_TOKEN.address, opener: ZERO_ADDR, factory: ZERO_ADDR };
       const address = requireEscrow(t);
-      const [feeBps, feeRecipient, token] = await Promise.all([
+      const [feeBps, feeRecipient, token, opener, factory] = await Promise.all([
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeBps" }),
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "feeRecipient" }),
         ethCall(client, { address, abi: bullaEscrowAbi, functionName: "token" }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "opener" }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "factory" }),
       ]);
-      return { address, feeBps: Number(feeBps), feeRecipient, token };
+      // Runtime guard: on X Layer mainnet the escrow must be bound to TapeOut's official contracts.
+      if (config.chain.id === 196) assertOfficialTapeOut({ opener, factory }, `BullaEscrow ${address}`);
+      return { address, feeBps: Number(feeBps), feeRecipient, token, opener, factory };
     },
     staleTime: 60_000,
     retry: 1,
@@ -84,14 +125,19 @@ export function useInvoice(id: bigint | null) {
   return useQuery({
     queryKey: ["invoice", t.address, id?.toString()],
     enabled: id !== null,
-    queryFn: async (): Promise<Invoice> => {
+    queryFn: async (): Promise<InvoiceData> => {
       if (config.mock) {
-        const inv = MOCK_INVOICES.find((x) => x.id === id);
-        if (!inv) throw new Error(`Invoice #${id} not found (mock data has ids 1-${MOCK_INVOICES.length}).`);
-        return inv;
+        const d = MOCK_INVOICES.find((x) => x.invoice.id === id);
+        if (!d) throw new Error(`Invoice #${id} not found (mock data has ids 1-${MOCK_INVOICES.length}).`);
+        return d;
       }
       const address = requireEscrow(t);
-      return (await ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] })) as Invoice;
+      const [invoice, milestones, payoutTarget] = await Promise.all([
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id!] }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id!] }),
+        ethCall(client, { address, abi: bullaEscrowAbi, functionName: "payoutTarget", args: [id!] }),
+      ]);
+      return { invoice: invoice as unknown as Invoice, milestones: milestones as unknown as Milestone[], payoutTarget };
     },
     refetchInterval: 10_000,
     retry: (count, err) => !(err instanceof NotConfiguredError) && !String(err).includes("InvoiceNotFound") && count < 1,
@@ -118,7 +164,9 @@ export function useInvoiceTxs(id: bigint | null) {
     enabled: id !== null && !config.mock && !!t.address,
     queryFn: async (): Promise<TxRef[]> => {
       const logs = await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
-      return logs.filter((l) => l.args.id === id).map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber }));
+      return logs
+        .filter((l) => l.args.id === id)
+        .map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber, index: typeof l.args.index === "bigint" ? Number(l.args.index) : undefined }));
     },
     refetchInterval: 15_000,
     retry: 0,
@@ -156,4 +204,35 @@ export function useAllowanceAndBalance(owner?: Address, token?: Address) {
 export function quoteFee(amount: bigint, feeBps: number) {
   const fee = (amount * BigInt(feeBps)) / 10_000n;
   return { fee, net: amount - fee };
+}
+
+export type SellerHistory = { invoices: number; releasedMilestones: number; releasedGross: bigint; refundedMilestones: number };
+
+/**
+ * Public payment history of a TapeOut circuit on this escrow, computed in the browser from events
+ * (CircuitBound + MilestoneReleased + MilestoneRefunded). No backend. Scans from the escrow's deploy block.
+ */
+export function useSellerHistory(processor?: Address, circuitId?: bigint) {
+  const t = useEscrowTarget();
+  return useQuery({
+    queryKey: ["sellerHistory", t.address, processor, circuitId?.toString()],
+    enabled: !!processor && circuitId !== undefined && !config.mock && !!t.address,
+    queryFn: async (): Promise<SellerHistory> => {
+      const logs = await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
+      const ids = new Set<bigint>();
+      for (const l of logs)
+        if (l.eventName === "CircuitBound" && String(l.args.processor).toLowerCase() === processor!.toLowerCase() && l.args.circuitId === circuitId) ids.add(l.args.id as bigint);
+      const h: SellerHistory = { invoices: ids.size, releasedMilestones: 0, releasedGross: 0n, refundedMilestones: 0 };
+      for (const l of logs) {
+        if (!ids.has(l.args.id as bigint)) continue;
+        if (l.eventName === "MilestoneReleased") {
+          h.releasedMilestones++;
+          h.releasedGross += (l.args.net as bigint) + (l.args.fee as bigint);
+        } else if (l.eventName === "MilestoneRefunded") h.refundedMilestones++;
+      }
+      return h;
+    },
+    staleTime: 30_000,
+    retry: 0,
+  });
 }

@@ -8,7 +8,6 @@ import { injectWallet } from "./wallet";
 const runtime = JSON.parse(fs.readFileSync(path.join(__dirname, ".runtime.json"), "utf8"));
 const keys = JSON.parse(fs.readFileSync(path.join(__dirname, ".keys.json"), "utf8"));
 const pub = createPublicClient({ chain: hardhat, transport: http(runtime.rpc) });
-const FIXTURE_CONTAINER = "0x00000000000000000000000000000000b0110a00"; // local fixture, not a real TapeOut container
 
 const bal = (who: Address) => pub.readContract({ address: runtime.token, abi: erc20Abi, functionName: "balanceOf", args: [who] });
 
@@ -39,13 +38,30 @@ async function localInput(page: Page, ts: number) {
   }, ts);
 }
 
-async function createInvoice(seller: Page, amount: string, dueTs: number, memo: string): Promise<string> {
+async function createInvoice(
+  seller: Page,
+  amount: string,
+  dueTs: number,
+  memo: string,
+  opts: { milestones?: { label: string; amount: string }[]; payToContainer?: boolean; arbiter?: string } = {},
+): Promise<string> {
   await seller.goto("#/create");
   await connect(seller);
   await seller.locator('input[name="buyer"]').fill(keys.buyer.address);
-  await seller.locator('input[name="amount"]').fill(amount);
+  const ms = opts.milestones ?? [{ label: "Logo", amount }];
+  for (let i = 0; i < ms.length; i++) {
+    if (i > 0) await seller.getByTestId("add-milestone").click();
+    await seller.locator(`input[name="label-${i}"]`).fill(ms[i].label);
+    await seller.locator(`input[name="amount-${i}"]`).fill(ms[i].amount);
+  }
   await seller.locator('input[name="due"]').fill(await localInput(seller, dueTs));
-  await seller.locator('input[name="container"]').fill(FIXTURE_CONTAINER);
+  // The local stack minted stand-in circuit #1 to the seller key; the processor is prefilled.
+  await expect(seller.getByTestId("standin-label")).toBeVisible();
+  await seller.locator('input[name="circuitId"]').fill("1");
+  await expect(seller.getByTestId("circuit-ok")).toHaveText("You hold circuit #1");
+  await expect(seller.getByTestId("container-address")).toHaveText(/^0x[0-9a-fA-F]{40}$/);
+  if (opts.payToContainer) await seller.getByTestId("pay-to-container").check();
+  if (opts.arbiter) await seller.locator('input[name="arbiter"]').fill(opts.arbiter);
   await seller.locator('input[name="memo"]').fill(memo);
   await expect(seller.getByTestId("warn-unaudited")).toBeVisible();
   await expect(seller.getByTestId("warn-circuit-holder")).toBeVisible();
@@ -56,11 +72,12 @@ async function createInvoice(seller: Page, amount: string, dueTs: number, memo: 
   return id;
 }
 
-async function fundAsBuyer(buyer: Page, id: string) {
+async function fundAsBuyer(buyer: Page, id: string, acceptArbiter = false) {
   await buyer.goto(`#/invoice/${id}`);
   await connect(buyer);
   const panel = buyer.getByTestId("fund-panel");
   await expect(panel).toBeVisible();
+  if (acceptArbiter) await panel.getByTestId("arbiter-accept").locator("input").check();
   await expect(panel.getByTestId("warn-unaudited")).toBeVisible();
   await expect(panel.getByTestId("warn-circuit-holder")).toBeVisible();
   await buyer.getByTestId("approve-btn").click();
@@ -98,29 +115,33 @@ test("happy path: create -> fund -> submit -> release", async ({ browser }) => {
   await expect(anon.getByTestId("actions-connect")).toBeVisible();
   await expect(anon.locator(".share svg.qr")).toBeVisible();
   await expect(anon.getByTestId("copy-link")).toBeVisible();
-  await expect(anon.getByTestId("container-id")).toHaveText(/b0110a00$/);
+  await expect(anon.getByTestId("container-address")).toHaveText(/^0x[0-9a-fA-F]{40}$/);
+  await expect(anon.getByTestId("payout-target")).toHaveText(keys.seller.address);
+  await expect(anon.getByTestId("share-x")).toHaveAttribute("href", /^https:\/\/twitter\.com\/intent\/tweet\?text=/);
+  await expect(anon.getByTestId("share-telegram")).toHaveAttribute("href", /^https:\/\/t\.me\/share\/url\?url=/);
   await expect(anon.getByTestId("state").locator("..")).toHaveAttribute("data-status", "pending");
 
   await fundAsBuyer(buyer, id);
 
   await seller.reload();
   await expect(seller.getByTestId("state")).toHaveText("Funded");
-  await seller.getByTestId("open-submit").click();
+  await seller.getByTestId("open-submit-0").click();
   await seller.getByTestId("delivery-hash").fill("logo-final-v3.zip");
   await seller.getByTestId("delivery-uri").fill("ipfs://bafy-e2e-example");
   await seller.getByTestId("submit-delivery").click();
   await expect(seller.getByTestId("state")).toHaveText("Submitted");
-  await expect(seller.getByTestId("delivery-hash-value")).toHaveText(/^0x[0-9a-f]{64}$/);
+  await expect(seller.getByTestId("delivery-hash-value-0")).toHaveText(/^0x[0-9a-f]{64}$/);
 
   await buyer.reload();
   await expect(buyer.getByTestId("state")).toHaveText("Submitted");
-  const rel = buyer.getByTestId("release-panel");
-  await expect(rel.getByTestId("release-fee")).toHaveText("1.25 mUSDC");
-  await expect(rel.getByTestId("release-net")).toHaveText("248.75 mUSDC");
+  const rel = buyer.getByTestId("release-panel-0");
+  await expect(rel.getByTestId("release-fee-0")).toHaveText("1.25 mUSDC");
+  await expect(rel.getByTestId("release-net-0")).toHaveText("248.75 mUSDC");
+  await expect(buyer.getByTestId("fund-panel")).toHaveCount(0);
+  await buyer.getByTestId("release-btn-0").click();
   await expect(rel.getByTestId("warn-unaudited")).toBeVisible();
-  await expect(rel.getByTestId("warn-circuit-holder")).toBeVisible();
-  await buyer.getByTestId("release-btn").click();
-  await buyer.getByTestId("release-confirm").click();
+  await expect(rel.getByTestId("payee-line")).toContainText("circuit holder");
+  await buyer.getByTestId("release-confirm-0").click();
   await expect(buyer.getByTestId("state")).toHaveText("Released");
 
   expect((await bal(keys.seller.address)) - sellerBefore).toBe(248_750_000n);
@@ -129,7 +150,9 @@ test("happy path: create -> fund -> submit -> release", async ({ browser }) => {
   // Seller has no actions on a closed invoice; a stranger wallet sees none either.
   await anon.reload();
   await expect(anon.getByTestId("state")).toHaveText("Released");
-  await expect(anon.getByTestId("timeline")).toContainText("Released to seller");
+  await expect(anon.getByTestId("timeline")).toContainText("Every milestone released");
+  await expect(anon.getByTestId("ms-state-0")).toHaveText("Released");
+  await expect(anon.getByTestId("history-released")).not.toHaveText("0");
 });
 
 test("timeout refund: create -> fund -> wait past due -> refund", async ({ browser }) => {
@@ -142,7 +165,7 @@ test("timeout refund: create -> fund -> wait past due -> refund", async ({ brows
 
   // Before due: no refund button, release still offered.
   await expect(buyer.getByTestId("refund-panel")).toHaveCount(0);
-  await expect(buyer.getByTestId("release-panel")).toBeVisible();
+  await expect(buyer.getByTestId("release-panel-0")).toBeVisible();
 
   await pub.request({ method: "evm_increaseTime" as never, params: [7200] as never });
   await pub.request({ method: "evm_mine" as never, params: [] as never });
@@ -181,9 +204,11 @@ test("parsed revert reason is shown, not a fake success", async ({ browser }) =>
   await seller.goto("#/create");
   await connect(seller);
   await seller.locator('input[name="buyer"]').fill(keys.buyer.address);
-  await seller.locator('input[name="amount"]').fill("1");
+  await seller.locator('input[name="label-0"]').fill("Tiny");
+  await seller.locator('input[name="amount-0"]').fill("1");
   await seller.locator('input[name="due"]').fill(await localInput(seller, (await chainNow()) + 600));
-  await seller.locator('input[name="container"]').fill(FIXTURE_CONTAINER);
+  await seller.locator('input[name="circuitId"]').fill("1");
+  await expect(seller.getByTestId("circuit-ok")).toBeVisible();
   // Advance chain time after form validation would pass: the contract must reject with DueInPast.
   await pub.request({ method: "evm_increaseTime" as never, params: [3600] as never });
   await pub.request({ method: "evm_mine" as never, params: [] as never });
@@ -191,6 +216,58 @@ test("parsed revert reason is shown, not a fake success", async ({ browser }) =>
   await expect(seller.getByTestId("toast-error").first()).toContainText(/DueInPast/);
   await expect(seller.getByTestId("toast-success")).toHaveCount(0);
   await expect(seller).toHaveURL(/#\/create/);
+});
+
+test("two milestones paid into the TapeOut container, buyer release + arbiter refund", async ({ browser }) => {
+  const seller = await walletPage(browser, "seller");
+  const buyer = await walletPage(browser, "buyer");
+  const arbiterCtx = await browser.newContext();
+  await injectWallet(arbiterCtx, keys.deployer.privateKey as Hex, runtime.rpc);
+  const arbiter = await arbiterCtx.newPage();
+
+  const id = await createInvoice(seller, "", (await chainNow()) + 7 * 86400, "E2E two milestones", {
+    milestones: [
+      { label: "Wireframes", amount: "40" },
+      { label: "Final build", amount: "60" },
+    ],
+    payToContainer: true,
+    arbiter: keys.deployer.address,
+  });
+  const container = (await seller.getByTestId("container-address").first().textContent())!.trim() as Address;
+  await expect(seller.getByTestId("payout-target")).toHaveText(container);
+  await expect(seller.getByTestId("arbiter")).toContainText(keys.deployer.address);
+  const containerBefore = await bal(container);
+
+  await fundAsBuyer(buyer, id, true);
+  await seller.reload();
+  await seller.getByTestId("open-submit-0").click();
+  await seller.getByTestId("delivery-hash").fill("wireframes.fig");
+  await seller.getByTestId("submit-delivery").click();
+  await expect(seller.getByTestId("ms-state-0")).toHaveText("Submitted");
+
+  await buyer.reload();
+  await buyer.getByTestId("release-btn-0").click();
+  await expect(buyer.getByTestId("payee-line").first()).toContainText("TapeOut container");
+  await buyer.getByTestId("release-confirm-0").click();
+  await expect(buyer.getByTestId("ms-state-0")).toHaveText("Released");
+  await expect(buyer.getByTestId("state")).toHaveText("Partly released");
+  expect((await bal(container)) - containerBefore).toBe(39_800_000n); // 40 minus 0.5%
+
+  await seller.reload();
+  await seller.getByTestId("open-submit-1").click();
+  await seller.getByTestId("delivery-hash").fill("build.zip");
+  await seller.getByTestId("submit-delivery").click();
+  await expect(seller.getByTestId("ms-state-1")).toHaveText("Submitted");
+
+  const buyerBefore = await bal(keys.buyer.address);
+  await arbiter.goto(`#/invoice/${id}`);
+  await connect(arbiter);
+  await expect(arbiter.getByTestId("actions-arbiter")).toBeVisible();
+  await arbiter.getByTestId("arbiter-refund-1").click();
+  await expect(arbiter.getByTestId("ms-state-1")).toHaveText("Refunded");
+  await expect(arbiter.getByTestId("state")).toHaveText("Completed");
+  expect((await bal(keys.buyer.address)) - buyerBefore).toBe(60_000_000n);
+  await expect(arbiter.getByTestId("history-released")).not.toHaveText("0");
 });
 
 test("responsive at 375px and keyboard skip link, no wallet", async ({ browser }) => {

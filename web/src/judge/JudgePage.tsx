@@ -3,15 +3,55 @@ import { erc20Abi, formatUnits, type Address, type Hex } from "viem";
 import { config, explorerAddress, explorerTx } from "../config";
 import { client } from "../lib/client";
 import { ethCall } from "../../../shared/rpc";
-import { stateName } from "../lib/invoice";
+import type { StateName } from "../lib/invoice";
 import { fmtAmount, shortAddr } from "../lib/format";
 import { StatusBadge } from "../components/Status";
 import { CopyButton } from "../components/Copy";
 import { loadBurners, newBurners, type Burners, type Role } from "./burners";
-import { DEMO_AMOUNT, JudgeError, runDemo, STEPS, tankKey, type Step, type StepKey } from "./runDemo";
+import { DEMO_AMOUNT, DEMO_MILESTONES, fmtOkb, JudgeError, runDemo, STEPS, tankKey, tankStatus, type Step, type StepKey } from "./runDemo";
+
+/** Same rules as lib/invoice displayState, from the raw states the runner reads. */
+function judgeDisplay(state: number, ms: number[]): StateName {
+  if (state === 1) return "Draft";
+  if (state === 3) return "Released";
+  if (state !== 2) return "None";
+  if (ms.some((m) => m === 1)) return "Submitted";
+  if (ms.some((m) => m >= 2)) return "Partly released";
+  return "Funded";
+}
+
+function TankLine({ tick }: { tick: number }) {
+  const [t, setT] = useState<Awaited<ReturnType<typeof tankStatus>>>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let live = true;
+    tankStatus()
+      .then((x) => live && (setT(x), setErr(false)))
+      .catch(() => live && setErr(true));
+    return () => {
+      live = false;
+    };
+  }, [tick]);
+  if (err) return <p className="muted small" data-testid="tank-line">Demo tank balance unavailable (RPC).</p>;
+  if (!t) return null;
+  return (
+    <p className="muted small" data-testid="tank-line">
+      Demo gas tank{" "}
+      {explorerAddress(t.address) ? (
+        <a className="mono" href={explorerAddress(t.address)!} target="_blank" rel="noreferrer">
+          {shortAddr(t.address)}
+        </a>
+      ) : (
+        <span className="mono">{shortAddr(t.address)}</span>
+      )}
+      : <span className="num" data-testid="tank-balance">{fmtOkb(t.balance)}</span> testnet OKB, about <span className="num">{t.runsLeft}</span> runs left. Per-run cap applies.
+    </p>
+  );
+}
 
 const ROLE_LABEL: Record<Role | "tank", string> = { freelancer: "Freelancer", client: "Client", tank: "Gas tank" };
 const FEE_BPS = 50; // judge escrow is deployed with 50 bps (contracts/scripts/deploy-judge.ts)
+const FEE_TOTAL = DEMO_MILESTONES.reduce((a, m) => a + (m.amount * BigInt(FEE_BPS)) / 10_000n, 0n);
 
 function fresh(): Step[] {
   return STEPS.map((s) => ({ ...s, status: "idle" as const }));
@@ -55,9 +95,10 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   const [steps, setSteps] = useState<Step[]>(fresh);
   const [running, setRunning] = useState(false);
   const [active, setActive] = useState<Role>("client");
-  const [invoice, setInvoice] = useState<{ id: bigint; state: number } | null>(null);
-  const [history, setHistory] = useState<number[]>([]);
-  const [result, setResult] = useState<{ ms: number } | null>(null);
+  const [invoice, setInvoice] = useState<{ id: bigint; state: StateName } | null>(null);
+  const [history, setHistory] = useState<StateName[]>([]);
+  const [container, setContainer] = useState<{ address: Address; circuitId: bigint } | null>(null);
+  const [result, setResult] = useState<{ ms: number; containerReceived: bigint } | null>(null);
   const [error, setError] = useState<JudgeError | Error | null>(null);
   const [tick, setTick] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -76,19 +117,22 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
     setSteps(fresh());
     setInvoice(null);
     setHistory([]);
+    setContainer(null);
     setResult(null);
     setError(null);
     started.current = performance.now();
     try {
       const r = await runDemo(burners, {
         step: (key: StepKey, patch) => setSteps((xs) => xs.map((x) => (x.key === key ? { ...x, ...patch } : x))),
-        state: (id, state) => {
-          setInvoice({ id, state });
-          setHistory((h) => (h[h.length - 1] === state ? h : [...h, state]));
+        state: (id, state, ms) => {
+          const d = judgeDisplay(state, ms);
+          setInvoice({ id, state: d });
+          setHistory((h) => (h[h.length - 1] === d ? h : [...h, d]));
         },
+        container: (address, circuitId) => setContainer({ address, circuitId }),
         active: (role) => role !== "tank" && setActive(role),
       });
-      setResult({ ms: r.ms });
+      setResult({ ms: r.ms, containerReceived: r.containerReceived });
       setElapsed(r.ms);
     } catch (e) {
       setError(e as Error);
@@ -109,8 +153,8 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   const code = (error as JudgeError | null)?.code;
   const tankMissing = !tankKey();
   const f = (v: bigint) => fmtAmount(v, 6, "DemoUSD");
-  const fee = (DEMO_AMOUNT * BigInt(FEE_BPS)) / 10_000n;
-  const state = invoice ? stateName(invoice.state) : null;
+  const fee = FEE_TOTAL;
+  const state = invoice ? invoice.state : null;
   const b = burners[active];
 
   return (
@@ -130,7 +174,8 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
             Advanced: use my own wallet
           </a>
         </div>
-        <p className="muted small">No wallet to install. Demo keys live only in this browser and hold nothing of value. Real-token mode uses USDC with OKX Wallet or any browser wallet.</p>
+        <p className="muted small">No wallet to install. Demo keys live only in this browser and hold nothing of value. TapeOut has no testnet deployment, so the circuit, opener and factory here are labelled stand-ins. Real-token mode uses USDC and real TapeOut circuits on X Layer mainnet, with OKX Wallet or any browser wallet.</p>
+        <TankLine tick={tick} />
       </header>
 
       {tankMissing && (
@@ -140,7 +185,7 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
       )}
       {error && (
         <div className="error" role="alert" data-testid={code === "tankEmpty" ? "judge-tank-empty" : "judge-error"}>
-          <strong>{code === "tankEmpty" ? "Demo gas tank empty. " : code === "chain" ? "Wrong network. " : "The demo stopped. "}</strong>
+          <strong>{code === "tankEmpty" ? "Demo gas tank empty. " : code === "cap" ? "Above the demo gas cap. " : code === "chain" ? "Wrong network. " : "The demo stopped. "}</strong>
           {error.message}
         </div>
       )}
@@ -194,27 +239,57 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
               <ol className="state-history" aria-label="Status changes read from chain" data-testid="judge-history">
                 {history.map((st, k) => (
                   <li key={k}>
-                    <StatusBadge state={stateName(st)} />
+                    <StatusBadge state={st} />
                   </li>
                 ))}
               </ol>
             )}
             <dl className="lines">
+              {DEMO_MILESTONES.map((m, k) => (
+                <div key={k}>
+                  <dt>
+                    Milestone {k + 1}: {m.label}
+                  </dt>
+                  <dd className="num">{f(m.amount)}</dd>
+                </div>
+              ))}
               <div>
-                <dt>Fee on release (0.50%)</dt>
+                <dt>Fees (0.50% per release)</dt>
                 <dd className="num">{f(fee)}</dd>
               </div>
               <div className="lines-total">
-                <dt>Freelancer receives</dt>
+                <dt>Paid into the Freelancer's container</dt>
                 <dd className="num">{f(DEMO_AMOUNT - fee)}</dd>
               </div>
             </dl>
+            {container && (
+              <div className="container-landing" data-testid="judge-container">
+                <p className="tag tag-demo">Testnet stand-in for TapeOut</p>
+                <p className="small">
+                  Circuit #{container.circuitId.toString()} · container{" "}
+                  {explorerAddress(container.address) ? (
+                    <a className="mono" href={explorerAddress(container.address)!} target="_blank" rel="noreferrer" data-testid="judge-container-link">
+                      {shortAddr(container.address)}
+                    </a>
+                  ) : (
+                    <span className="mono" data-testid="judge-container-link">
+                      {shortAddr(container.address)}
+                    </span>
+                  )}
+                </p>
+                {result && (
+                  <p className="check-ok" data-testid="judge-container-received">
+                    Container received {f(result.containerReceived)}
+                  </p>
+                )}
+              </div>
+            )}
             {invoice && (
               <a className="btn btn-block mt-16" href={`#/invoice/${invoice.id}?escrow=demo`} data-testid="judge-receipt-link">
                 Open public receipt #{invoice.id.toString()}
               </a>
             )}
-            <p className="muted small mt-12">Container id is a local fixture: TapeOut has no published X Layer testnet deployment. Real invoices bind a mainnet container.</p>
+            <p className="muted small mt-12">On X Layer mainnet the same contract checks the seller's real TapeOut circuit (ownerOf) and pays its real container (opener.accountOf).</p>
           </section>
 
           <section className="card" aria-labelledby="roles-title">

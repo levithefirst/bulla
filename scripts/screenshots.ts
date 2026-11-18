@@ -6,7 +6,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { chromium } from "@playwright/test";
-import { createPublicClient, createWalletClient, http, keccak256, maxUint256, pad, parseUnits, toBytes, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, keccak256, maxUint256, parseUnits, toBytes, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { hardhat } from "viem/chains";
 import { bullaEscrowAbi } from "../web/src/abi/bullaEscrow";
@@ -14,7 +14,6 @@ import { mockErc20Abi } from "../web/src/abi/mockErc20";
 import { root, startLocalStack } from "./local-stack";
 
 const OUT = path.join(root, "docs/screenshots");
-const FIXTURE_CONTAINER = pad("0x00000000000000000000000000000000b0110a00", { size: 32 });
 
 async function main() {
   const s = await startLocalStack({ rpcPort: 8547, webPort: 4175, outDir: "dist-shots", tag: "shots" });
@@ -27,27 +26,57 @@ async function main() {
     const now = Number((await pub.getBlock()).timestamp);
     await send(buyer.writeContract({ address: s.token, abi: mockErc20Abi, functionName: "approve", args: [s.escrow, maxUint256] }));
 
-    const create = (amount: string, days: number, memo: string) =>
-      send(seller.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "createInvoice", args: [s.keys.buyer.address as Address, s.token, parseUnits(amount, 6), BigInt(now + days * 86400), "0x" + "00".repeat(32) as Hex, FIXTURE_CONTAINER, memo] }));
-    const act = (fn: "fundInvoice" | "releaseFunds", id: bigint) => send(buyer.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: fn, args: [id] }));
-    const submit = (id: bigint, what: string, uri: string) => send(seller.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "submitDelivery", args: [id, keccak256(toBytes(what)), uri] }));
+    const Z = "0x0000000000000000000000000000000000000000" as Address;
+    const create = (ms: [string, string][], days: number, memo: string, payToContainer: boolean, arbiter: Address = Z) =>
+      send(
+        seller.writeContract({
+          address: s.escrow,
+          abi: bullaEscrowAbi,
+          functionName: "createInvoice",
+          args: [
+            {
+              buyer: s.keys.buyer.address as Address,
+              token: s.token,
+              amounts: ms.map(([, a]) => parseUnits(a, 6)),
+              labels: ms.map(([l]) => l),
+              dueTimestamp: BigInt(now + days * 86400),
+              processor: s.tapeout.processor,
+              circuitId: 1n,
+              payToContainer,
+              arbiter,
+              termsHash: ("0x" + "00".repeat(32)) as Hex,
+              memo,
+            },
+          ],
+        }),
+      );
+    const fund = (id: bigint, arbiter: Address = Z) => send(buyer.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "fundInvoice", args: [id, arbiter] }));
+    const release = (id: bigint, i: bigint) => send(buyer.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "releaseMilestone", args: [id, i] }));
+    const submit = (id: bigint, i: bigint, what: string, uri: string) => send(seller.writeContract({ address: s.escrow, abi: bullaEscrowAbi, functionName: "submitMilestone", args: [id, i, keccak256(toBytes(what)), uri] }));
+    const arb = s.keys.deployer.address as Address;
 
-    // #1 Submitted, #2 Released, #3 Draft
-    await create("1200", 9, "Brand identity, milestone 2");
-    await act("fundInvoice", 1n);
-    await submit(1n, "brand-identity-v2.zip", "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
-    await create("250", 5, "Logo design, milestone 1");
-    await act("fundInvoice", 2n);
-    await submit(2n, "logo-final.zip", "");
-    await act("releaseFunds", 2n);
-    await create("400", 14, "Landing page copy");
+    // #1 three milestones into the container, one released, one submitted, arbiter set
+    await create([["Wireframes", "400"], ["Build", "500"], ["Launch", "300"]], 9, "Brand identity and landing page", true, arb);
+    await fund(1n, arb);
+    await submit(1n, 0n, "wireframes.fig", "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    await release(1n, 0n);
+    await submit(1n, 1n, "build.zip", "");
+    // #2 fully released, paid to the circuit holder
+    await create([["Logo concepts", "100"], ["Final logo files", "150"]], 5, "Logo design", false);
+    await fund(2n);
+    await submit(2n, 0n, "concepts.pdf", "");
+    await release(2n, 0n);
+    await submit(2n, 1n, "logo-final.zip", "");
+    await release(2n, 1n);
+    // #3 draft
+    await create([["Landing page copy", "400"]], 14, "Landing page copy", false);
 
     fs.mkdirSync(OUT, { recursive: true });
     const browser = await chromium.launch();
     const shots: [string, string, number, number][] = [
       ["landing", "#/", 1280, 860],
-      ["create", "#/create", 1280, 1000],
-      ["receipt-submitted", "#/invoice/1", 1280, 1180],
+      ["create", "#/create", 1280, 1300],
+      ["receipt-submitted", "#/invoice/1", 1280, 1400],
       ["receipt-released", "#/invoice/2", 1280, 1180],
       ["mobile-landing", "#/", 375, 812],
       ["mobile-receipt", "#/invoice/1", 375, 812],

@@ -5,10 +5,10 @@ import { config } from "../config";
 import { StatusIcon, type StatusKind } from "../components/Status";
 
 const FLOW: { kind: StatusKind; title: string; body: string }[] = [
-  { kind: "pending", title: "Draft", body: "The seller sets the buyer, amount, due date, and the TapeOut circuit container the invoice is bound to." },
-  { kind: "funded", title: "Funded", body: "The buyer approves USDC, then funds. The money sits in the escrow contract, not with either party." },
-  { kind: "funded", title: "Submitted", body: "The seller records a delivery hash and an optional link. It is on chain and on the receipt." },
-  { kind: "released", title: "Released", body: "The buyer releases and the seller is paid, minus 0.5%. After the due date an unreleased invoice refunds the buyer." },
+  { kind: "pending", title: "Draft", body: "The seller bills up to 10 milestones with a TapeOut circuit they hold. The contract checks ownerOf on chain." },
+  { kind: "funded", title: "Funded", body: "The buyer funds every milestone up front in USDC. The money sits in the escrow contract, not with either party." },
+  { kind: "funded", title: "Submitted", body: "The seller records a delivery hash per milestone. An optional arbiter, accepted by the buyer, can settle a dispute." },
+  { kind: "released", title: "Released", body: "Each release pays the circuit holder or its TapeOut container, minus 0.5%. Unreleased milestones refund after the due date." },
 ];
 
 const network = config.isXLayer ? "X Layer" : config.chain.name;
@@ -168,8 +168,8 @@ export function Landing() {
         <div className="card tapeout-card">
           <h2 className="section-title">Where TapeOut fits</h2>
           <p>
-            Each invoice stores the seller's TapeOut circuit container: their on-chain identity. The Bulla app is a static site published into that container on DeWEB, so receipts are served from {network},
-            not from a server we run.
+            Your TapeOut circuit is your business account. The escrow only lets the circuit's holder bill with it (checked with ownerOf), pays each release to the holder or, if you choose, into the circuit's
+            container, and the receipt shows the circuit's public payment history. The app is a static site meant for DeWEB, so receipts can be served from {network}, not from a server we run.
           </p>
           <Warnings />
         </div>

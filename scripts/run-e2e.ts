@@ -10,7 +10,7 @@ import { root, startLocalStack } from "./local-stack";
 async function main() {
   const s = await startLocalStack({ rpcPort: Number(process.env.E2E_RPC_PORT ?? 8546), webPort: Number(process.env.E2E_WEB_PORT ?? 4174), outDir: "dist-e2e", tag: "e2e" });
   try {
-    fs.writeFileSync(path.join(root, "e2e/.runtime.json"), JSON.stringify({ rpc: s.rpc, baseURL: s.baseURL, escrow: s.escrow, token: s.token, deployBlock: s.deployBlock }, null, 2));
+    fs.writeFileSync(path.join(root, "e2e/.runtime.json"), JSON.stringify({ rpc: s.rpc, baseURL: s.baseURL, escrow: s.escrow, token: s.token, deployBlock: s.deployBlock, tapeout: s.tapeout }, null, 2));
     console.log("\n[e2e] running Playwright");
     const r = spawnSync("npx", ["playwright", "test", "--config", "e2e/playwright.config.ts", "--trace", "off"], { cwd: root, stdio: "inherit" });
     const ok = r.status === 0;

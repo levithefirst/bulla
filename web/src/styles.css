@@ -426,3 +426,38 @@ legend { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-trans
 .state-history { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; padding: 0; margin: 0 0 8px; align-items: center; }
 .state-history li { display: flex; align-items: center; gap: 6px; }
 .state-history li + li::before { content: "→"; color: var(--text-secondary); }
+
+/* ---------- v2: circuits, milestones, payout ---------- */
+.grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 0 16px; }
+.circuit-check { display: grid; gap: 4px; margin: 4px 0 14px; min-height: 1.5em; word-break: break-all; }
+.check-ok { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-weight: 600; font-size: 0.875rem; color: var(--released-text); background: var(--released-bg); border: 1px solid currentColor; padding: 2px 10px; border-radius: 999px; }
+.check-ok::before { content: "✓"; }
+.toggle { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg); margin: 4px 0 12px; cursor: pointer; }
+.toggle input { width: 18px; height: 18px; min-height: 0; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.toggle .muted { display: inline; }
+.ms-editor { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 8px; }
+.ms-row { display: grid; grid-template-columns: 26px minmax(0, 1.4fr) minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.ms-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 0.75rem; font-weight: 600; }
+.ms-row .copy-btn { font-size: 1.2rem; justify-content: center; }
+.ms-row .copy-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.table-wrap { overflow-x: auto; margin-bottom: 8px; }
+.ms-table { width: 100%; border-collapse: collapse; font-size: 0.925rem; }
+.ms-table th { text-align: left; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.ms-table td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
+.ms-table .r { text-align: right; white-space: nowrap; }
+.ms-label { font-weight: 600; display: block; }
+.ms-sub { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; color: var(--text-secondary); font-size: 0.8rem; margin-top: 2px; word-break: break-all; }
+.status-sm { font-size: 0.75rem; padding: 2px 8px 2px 6px; }
+.status-sm svg { width: 12px; height: 12px; }
+.ms-actions { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; }
+.ms-action { border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; background: var(--bg); }
+.ms-action .muted, .ms-action p { margin: 0; }
+.confirm { display: grid; gap: 6px; }
+.container-landing { border-top: 1px solid var(--border-subtle); margin-top: 12px; padding-top: 12px; display: grid; gap: 6px; }
+.container-landing p { margin: 0; }
+.container-landing .tag-demo { margin-left: 0; justify-self: start; }
+@media (max-width: 720px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .ms-row { grid-template-columns: 26px minmax(0, 1fr) 32px; }
+  .ms-row .ms-amount { grid-column: 2 / 3; }
+}
