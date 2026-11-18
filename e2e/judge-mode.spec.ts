@@ -46,7 +46,7 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
   if (TESTNET) {
     const hrefs = await page.getByTestId("step-tx").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href));
     expect(hrefs).toHaveLength(12);
-    for (const h of hrefs) expect(h).toMatch(/^https:\/\/www\.okx\.com\/web3\/explorer\/xlayer-test\/tx\/0x[0-9a-f]{64}$/);
+    for (const h of hrefs) expect(h).toMatch(/^https:\/\/web3\.okx\.com\/explorer\/x-layer-testnet\/tx\/0x[0-9a-f]{64}$/);
   }
 
   // The public receipt for the demo invoice reads Released with no wallet.

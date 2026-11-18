@@ -9,7 +9,7 @@ export const xLayerMainnet = defineChain({
   name: "X Layer",
   nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
   rpcUrls: { default: { http: ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"] } },
-  blockExplorers: { default: { name: "OKX Explorer", url: "https://www.okx.com/web3/explorer/xlayer" } },
+  blockExplorers: { default: { name: "OKX Explorer", url: "https://web3.okx.com/explorer/x-layer" } },
 });
 
 export const xLayerTestnet = defineChain({
@@ -17,7 +17,7 @@ export const xLayerTestnet = defineChain({
   name: "X Layer Testnet",
   nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
   rpcUrls: { default: { http: ["https://testrpc.xlayer.tech/terigon", "https://xlayertestrpc.okx.com/terigon"] } },
-  blockExplorers: { default: { name: "OKX Explorer", url: "https://www.okx.com/web3/explorer/xlayer-test" } },
+  blockExplorers: { default: { name: "OKX Explorer", url: "https://web3.okx.com/explorer/x-layer-testnet" } },
   testnet: true,
 });
 
