@@ -198,3 +198,13 @@ Do not send a seed or a private key. If Fluid wants the 0.5% fees or the circuit
 ## Spent so far
 
 - 18 Nov 2026: v1 BullaEscrow deployed to mainnet at 0x6f74E81A8a3444D9C28D702582Ccf2F0a861790A (block 76192196), about $0.003 of gas. Superseded by v2 per the win audit; not recorded as the live escrow.
+- 18 Nov 2026, 14:07 Africa/Lagos: **v2 BullaEscrow** deployed to mainnet at `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (block 76238200, tx `0x2f9049d5cfc78ac28342eacef488ed9889f8fb90bd8d9e9a55425ce6cee94f67`), 3,250,465 gas at 0.0253125 gwei = **0.0000822774 OKB** (about $0.007). Sourcify exact match.
+- 18 Nov 2026, about 14:15 Africa/Lagos: **TapeOut circuit and container** for the ops wallet, by script (viem, no browser). Fees re-read on chain before each tx: `mintPrice() = 0`, `protocolFee() = 0.00066 OKB` (cpu #397 Tapee, native OKB; the cheaper 1,000,000-wei processors #419/#422/#423 charge that fee in BEM, an ERC-20 the wallet does not hold), `TAPEOUT_FEE() = 0.0013 OKB`, `opener.FEE() = 0.08 OKB`. Each tx was simulated with `eth_call` first. Function signatures come from the official app ABI (https://www.tapeout.net/app/assets/index-DizVcbig.js) and their selectors were confirmed in the beacon implementations' bytecode (processor impl `0x977f217887E085D298Cb3819cDAD5A0ee35F29B2`: `tapeout(bytes,uint32,uint32)` `0x7bd3ac1d`; transistors impl `0x44Ebf3345bcf9aB329e7a28E53fd8EcfAd1a5EFE`: `mint(uint256,uint256)` `0x1b2ef1ca`). Netlist: one input, one output, encoded as the official app does (each output buffered by two NANDs).
+
+| Step | Tx | Gas used | Cost (OKB) |
+| --- | --- | --- | --- |
+| `transistors.mint(0, 2)` (2 NAND) | `0x739ceb2cf1407c38cec7b248730a425d16c716f3d3f702ce422b66f465a50d5b` | 137,699 | 0.000662754 |
+| `tapeout(nl, 1, 1)` -> circuit #1 | `0xa19c5245b28194fb9477a2ae498ea6ff6c78a1bae1479e7675708ce2c11f6c37` | 241,782 | 0.001304836 |
+| `opener.open(Tapee, 1)` | `0x87672d904015bbdcc6a9cc3a505bc27d489033cd34869078df2a6056fefd5f2a` | 167,256 | 0.080003345 |
+
+Ops wallet OKB: 0.105001870 before the circuit, **0.023030936** after. Circuit plus container total: **0.081970934 OKB** (about $7.15 at $87.18/OKB, OKX OKB-USDT ticker 18 Nov 2026).

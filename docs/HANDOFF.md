@@ -84,11 +84,22 @@ CONFIRM_MAINNET=I_UNDERSTAND_UNAUDITED npm run deploy:mainnet
 
 The script writes `xlayerMainnet.escrow` and the official `tapeout` binding; it refuses `TAPEOUT_*` overrides on mainnet. No mock is ever deployed on 196.
 
-Optionally verify the source on the OKX explorer (docs: https://web3.okx.com/onchainos/dev-docs/xlayer/developer/verify-a-smart-contract/verifying-contract). Done: `xlayerMainnet.escrow` set and committed; explorer shows the contract. Placeholder: `<<ESCROW_ADDRESS_MAINNET>>`.
+Optionally verify the source on the OKX explorer (docs: https://web3.okx.com/onchainos/dev-docs/xlayer/developer/verify-a-smart-contract/verifying-contract). **Done 18 Nov 2026 (Grok Bot, ops wallet):** v2 escrow `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07`, tx `0x2f9049d5cfc78ac28342eacef488ed9889f8fb90bd8d9e9a55425ce6cee94f67`, block 76238200, fee recipient and owner `0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0`, 50 bps. Source verified on Sourcify (exact match): https://repo.sourcify.dev/196/0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07 . OKLink verification not done (its API needs a key).
 
 ### 5. TapeOut circuit and container (human, signed)
 
-Follow `docs/tapeout-binding.md`. **Open the container** in the official app (https://www.tapeout.net/containers, 0.08 OKB) if invoices should pay into it; until then releases go to the holder. Done: `npm run probe:tapeout` with `TAPEOUT_PROCESSOR`/`TAPEOUT_CIRCUIT_ID` prints `opened true` and `holder` = the circuit-holder wallet. Placeholders: `<<TAPEOUT_PROCESSOR_ADDRESS>>`, `<<PROCESSOR_NUMBER>>`, `<<CIRCUIT_ID>>`, `<<CONTAINER_ADDRESS>>`.
+Follow `docs/tapeout-binding.md`. **Open the container** in the official app (https://www.tapeout.net/containers, 0.08 OKB) if invoices should pay into it; until then releases go to the holder. Done: `npm run probe:tapeout` with `TAPEOUT_PROCESSOR`/`TAPEOUT_CIRCUIT_ID` prints `opened true` and `holder` = the circuit-holder wallet. **Done 18 Nov 2026 (Grok Bot, by script, ops wallet `0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0`):**
+
+| Field | Value |
+| --- | --- |
+| Processor | cpu #397 "Tapee", `0x34fd3c870DEd61b264e3E7062163EA4539F79998` (transistors `0xE19f6F9d10e85a1EF2F3aa753F65EF24bCe2018A`, native OKB pricing, mint price 0) |
+| Circuit | **#1** on Tapee (1 in, 1 out, 2 NAND buffer), holder = ops wallet |
+| Container | `0x52D7504EFDF73EcdCE91411B77e154CEe353241e`, **opened** (`isOpened = true`), `token() = (196, Tapee, 1)`, `owner()` = ops wallet, `EXEC_FEE()` = 0.0013 OKB |
+| Mint 2 NAND | `0x739ceb2cf1407c38cec7b248730a425d16c716f3d3f702ce422b66f465a50d5b` |
+| Tape out | `0xa19c5245b28194fb9477a2ae498ea6ff6c78a1bae1479e7675708ce2c11f6c37` |
+| Open container | `0x87672d904015bbdcc6a9cc3a505bc27d489033cd34869078df2a6056fefd5f2a` |
+
+`npm run probe:tapeout` with `TAPEOUT_PROCESSOR=0x34fd3c870DEd61b264e3E7062163EA4539F79998 TAPEOUT_CIRCUIT_ID=1` prints `opened true` and the ops wallet as holder. A `createInvoice` eth_call on the mainnet escrow with this circuit and `payToContainer = true` succeeds. Details and costs: `docs/planning/mainnet-budget.md` "Spent so far".
 
 ### 6. DeWEB publish (human, signed)
 
