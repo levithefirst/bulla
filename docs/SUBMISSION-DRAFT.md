@@ -18,18 +18,18 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 
 | Field | Value |
 | --- | --- |
-| BullaEscrow v2 (X Layer, chain 196) | `<<ESCROW_ADDRESS_MAINNET>>` |
-| A real receipt | `<<DEWEB_GATEWAY_URL>>#/invoice/<<DEMO_INVOICE_ID>>` |
-| DeWEB access link (canonical) | `<<DEWEB_GATEWAY_URL>>` (TapeKit gateway for `<<CIRCUIT_ID>>.2.<<PROCESSOR_NUMBER>>.tape`) |
-| HTTPS mirror (optional) | `<<HTTPS_MIRROR_URL>>` |
+| BullaEscrow v2 (X Layer, chain 196) | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
+| A real receipt | https://1-2-397.tapekit.org/#/invoice/1 (demo invoice #1: 2 x 0.50 USDC milestones, both released, 0.995 USDC paid into the circuit container, 0.005 USDC fee; same receipt on the HTTPS mirror: https://app-usebulla.vercel.app/#/invoice/1) |
+| DeWEB access link (canonical) | https://1-2-397.tapekit.org/ (TapeKit gateway for `1.2.397.tape`) |
+| HTTPS mirror (optional) | https://app-usebulla.vercel.app (HTTPS mirror; canonical copy is on DeWEB) |
 | Escrow token | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` (Circle's X Layer address; symbol and 6 decimals probed, `docs/research.md` §2) |
 | TapeOut opener / factory the escrow is bound to | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` / `0x1f09DAeFA827f02CBb40967cc91b259763760761` (official X Layer, `docs/research.md` §8) |
-| Processor contract address | `<<TAPEOUT_PROCESSOR_ADDRESS>>` |
-| Circuit ID | `<<CIRCUIT_ID>>` |
-| Circuit container | `<<CONTAINER_ADDRESS>>` |
+| Processor contract address | `0x34fd3c870DEd61b264e3E7062163EA4539F79998` (processor #397, Tapee) |
+| Circuit ID | `1` |
+| Circuit container | `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` (opened) |
 | Real invoices settled (consented counterparties) | `<<REAL_INVOICE_LINKS_OR_NONE_YET>>` |
-| DeWEB site manifest SHA-256 | `<<SITE_MANIFEST_SHA256>>` |
-| Testnet escrow and judge escrow (optional) | `<<ESCROW_ADDRESS_TESTNET>>`, `<<JUDGE_ESCROW_ADDRESS_TESTNET>>` |
+| DeWEB site manifest SHA-256 | `0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6` |
+| Testnet escrow and judge escrow (optional) | `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4` |
 | Demo video | `<<VIDEO_URL>>` |
 | Code | `<<REPO_LINK_OR_PRIVATE>>` (visibility is Fluid's decision) |
 
@@ -39,12 +39,12 @@ A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`). Do
 
 | Feature | What Bulla does with it | On chain |
 | --- | --- | --- |
-| TapeOut processor `ownerOf` (TapeKit SPEC B.3) | `createInvoice` requires the caller to hold the circuit; every release re-reads the holder, so receivables follow the circuit if it changes hands | processor `<<TAPEOUT_PROCESSOR_ADDRESS>>` |
+| TapeOut processor `ownerOf` (TapeKit SPEC B.3) | `createInvoice` requires the caller to hold the circuit; every release re-reads the holder, so receivables follow the circuit if it changes hands | processor `0x34fd3c870DEd61b264e3E7062163EA4539F79998` (processor #397, Tapee) |
 | TapeOut factory `isCPU` (B.1) | Only real TapeOut processors can be used to bill | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
 | TapeOut opener `accountOf` (B.2) | The circuit's ERC-6551 container is stored per invoice; the seller can opt in to receive releases there | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
 | Container `token()` (B.4) + factory list | Receipts show the seller's `<#ID>.2.<cpu>.tape` name, checked both ways | read-only |
-| DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | `<<DEWEB_GATEWAY_URL>>` |
-| X Layer settlement (196; testnet 1952 for judge mode) | Escrow, milestones, fees and refunds are X Layer transactions | `<<ESCROW_ADDRESS_MAINNET>>` |
+| DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | https://1-2-397.tapekit.org/ |
+| X Layer settlement (196; testnet 1952 for judge mode) | Escrow, milestones, fees and refunds are X Layer transactions | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
 | Native USDC on X Layer | The only token the mainnet escrow accepts | `0xB6CEceAB302E2E4948951eE7843FC24E92933061` |
 | OKX Wallet + OKX explorer | OKX Wallet is the recommended connector; every tx and address links to the OKX explorer | n/a |
 

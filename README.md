@@ -18,9 +18,10 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 | Judge mode ("Try it now": one tap, two milestones paid into a stand-in container on X Layer testnet) | done; local acceptance 12 txs in 0.7 s in-app (664 ms), 1.0 s tap to Released (982 ms) (limit 10 s); testnet deploy + gas tank pending (Grok Bot) |
 | Web app (landing, create with circuit check and milestones, receipt with on-chain activity panel and share kit) | done; static relative-path build, light and dark, 375px to desktop |
 | E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, 375px + keyboard, judge mode) | 10 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
-| X Layer testnet / mainnet deploy | v2 scripts ready, **not deployed** (needs a key); a superseded v1 escrow on mainnet is ignored |
-| TapeOut circuit + container | **not minted** (human, official UI) |
-| DeWEB publish | package ready (~465 KB, 12 files), **not published** |
+| X Layer testnet / mainnet deploy | v2 deployed: mainnet `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (Sourcify exact match), testnet `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, judge `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4`; a superseded v1 escrow on mainnet is ignored |
+| TapeOut circuit + container | circuit #1 on processor #397 (Tapee), container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` opened; mainnet demo invoice #1 paid 0.995 USDC into it |
+| DeWEB publish | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) |
+| Mainnet web app (HTTPS mirror) | https://app-usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://app-usebulla.vercel.app/#/invoice/1 (DeWEB: https://1-2-397.tapekit.org/#/invoice/1) |
 
 Everything still open is listed in [`docs/HANDOFF.md`](docs/HANDOFF.md). `npm run release:check` fails until it is done.
 
@@ -94,7 +95,7 @@ npx playwright install chromium   # once, if your machine has no Playwright brow
 npm run e2e                       # prints [e2e] RESULT: PASS / FAIL
 ```
 
-DeWEB package: `npm run deweb:package` → `deweb-out/` (see `docs/deweb.md`).
+DeWEB package: `npm run deweb:package` → `deweb-out/` (see `docs/deweb.md`). Publish: `node scripts/deweb-publish.mjs` (dry run; `OPS_KEY=… node scripts/deweb-publish.mjs send` uploads only files not already on chain with the same hash), then `node scripts/deweb-bind.mjs` (activation, aborts if `monthlyFee` is nonzero).
 
 Probes (read-only): `npm run probe:network`, `npm run probe:tapeout`.
 
@@ -154,7 +155,7 @@ X Layer is the core loop: every lock, delivery and release is an X Layer transac
 | 1 | **X Layer settlement** (mainnet 196, testnet 1952) | `BullaEscrow` holds funds and state on X Layer; receipts read straight from an X Layer RPC; the judge loop runs on testnet 1952 | `contracts/`, `web/src/config.ts`, `web/src/judge/` | Code and deploy scripts done; v2 deploys pending |
 | 2 | **TapeOut circuit binding** (SPEC B.1 to B.4) | `createInvoice` requires `factory.isCPU(processor)` and `processor.ownerOf(circuitId) == seller`; each release re-reads the holder; receipts show the `<#ID>.2.<cpu>.tape` name and the circuit's on-chain activity (funded invoices only) | `contracts/contracts/BullaEscrow.sol`, `web/src/lib/circuit.ts`, `shared/tapeoutCore.ts` | Wired; official X Layer opener and factory hard-coded for 196; circuit mint pending (human) |
 | 3 | **TapeOut container payout** (`opener.accountOf`) | Per-invoice opt-in: releases land in the circuit's ERC-6551 container | same | Wired; opt-in, pays the container only once opened (else the holder); withdraw with `execute` + `EXEC_FEE()` or tapeout.net |
-| 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts` | Package done; publish pending (human) |
+| 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts`, `scripts/deweb-publish.mjs`, `scripts/deweb-bind.mjs` | Published, https://1-2-397.tapekit.org/ |
 | 5 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to X Layer; "Get OKX Wallet" link | `web/src/lib/wallet.tsx` | Done (official provider-name doc not found; research §7) |
 | 6 | **OKX explorer deep links** on every tx and address | Toasts, receipt timeline, payout target, container, judge steps | `web/src/config.ts` | Done; testnet `/tx/` path to confirm on first click |
 | 7 | **Native USDC on X Layer** | The only token the mainnet escrow accepts; judge mode uses valueless DemoUSD | `contracts/deployments.json` | Token confirmed; escrow deploy pending |

@@ -101,13 +101,19 @@ Follow `docs/tapeout-binding.md`. **Open the container** in the official app (ht
 
 `npm run probe:tapeout` with `TAPEOUT_PROCESSOR=0x34fd3c870DEd61b264e3E7062163EA4539F79998 TAPEOUT_CIRCUIT_ID=1` prints `opened true` and the ops wallet as holder. A `createInvoice` eth_call on the mainnet escrow with this circuit and `payToContainer = true` succeeds. Details and costs: `docs/planning/mainnet-budget.md` "Spent so far".
 
-### 6. DeWEB publish (human, signed)
+### 6. DeWEB publish
 
-Follow `docs/deweb.md`: `npm run deweb:package` after the mainnet deploy, upload `deweb-out/site/` to the container (HashPort or direct SiteRegistry calls), activate the name if required, check the gateway status page. Then fill `web/src/deweb.json`, rebuild, re-upload changed files. Done: the gateway URL opens the app, `#/invoice/<id>` shows a mainnet receipt with no wallet, status page says every file verified. Placeholders: `<<DEWEB_GATEWAY_URL>>`, `<<SITE_MANIFEST_SHA256>>`.
+**Done (Grok Bot, 18 Nov 2026, ops wallet).** Package `0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6` (12 files, 504,497 bytes, 26 chunks) uploaded to container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` with `scripts/deweb-publish.mjs`: 26 `putFile`/`appendChunk` txs plus `setFallback("index.html")`, every tx simulated first, log in `deweb-out/publish-log.json` (gitignored). ABI: Sourcify exact match of the BNB SiteRegistry impl; the X Layer proxy points at the TapeKit-pinned impl `0xa85c4143…`, whose bytecode contains every selector used. All 12 files read back byte-for-byte (`read()` SHA-256 equals the manifest).
 
-### 7. HTTPS mirror (optional, human)
+The gateway refused to show the site until the name was paid, so `scripts/deweb-bind.mjs` called `DomainBinding.bind("1.2.397.tape", container, 120)` (impl `0x5ebf29b8…` pinned in TapeKit `kernel/src/config.js`; `monthlyFee` re-read as 0, so value 0): tx `0x412e41140339d1d180ffa994320ced33899235e50ad1c18ac0a391693ef14b9e`, `isLive` true, container paid until 26 Sep 2036.
 
-Checklist in `docs/deweb.md`. Done: mirror shows the same receipt. Placeholder: `<<HTTPS_MIRROR_URL>>`.
+Cost: 0.002770333 OKB for the upload (27 txs, about 115M gas at 0.024 gwei) plus 0.000004452 OKB for the bind. Live: https://1-2-397.tapekit.org/ and https://1-2-397.tapekit.org/#/invoice/1 (headless check: invoice #1 Released, both milestones Released, 0.995 USDC to the container).
+
+`web/src/deweb.json` is filled and the HTTPS mirror rebuilt with it. The DeWEB copy is the build from before that edit, so its footer still says "not published yet"; republishing only the changed JS (`node scripts/deweb-publish.mjs send` after `npm run deweb:package`) would fix that for roughly 0.0013 OKB. Not done, to keep to a single pass.
+
+### 7. HTTPS mirror
+
+**Done.** https://app-usebulla.vercel.app (Vercel project `app-usebulla`, static upload of the mainnet build, no repo link, no gas tank key, `.vercelignore` blocks `.env*`). Receipt: https://app-usebulla.vercel.app/#/invoice/1.
 
 ### 8. Demo invoices on mainnet (human, signed, real funds)
 

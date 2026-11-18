@@ -1,10 +1,10 @@
 {
-  "_comment": "Fill in after publishing to DeWEB (docs/deweb.md). Shown in the app footer. null = not published yet.",
-  "tapeName": null,
-  "processor": null,
-  "circuitId": null,
-  "container": null,
-  "gatewayUrl": null,
-  "siteManifestSha256": null,
-  "publishedAt": null
+  "_comment": "Filled after the confirmed DeWEB publish on 18 Nov 2026 (docs/deweb.md). Shown in the app footer. siteManifestSha256 is the published package (built before this file was filled).",
+  "tapeName": "1.2.397.tape",
+  "processor": "0x34fd3c870DEd61b264e3E7062163EA4539F79998",
+  "circuitId": "1",
+  "container": "0x52D7504EFDF73EcdCE91411B77e154CEe353241e",
+  "gatewayUrl": "https://1-2-397.tapekit.org/",
+  "siteManifestSha256": "0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6",
+  "publishedAt": "2026-11-18"
 }
