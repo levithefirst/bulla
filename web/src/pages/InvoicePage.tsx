@@ -24,7 +24,7 @@ import { QueryProvider } from "../lib/query";
 import { navigate } from "../router";
 import { InvoiceActions } from "../components/InvoiceActions";
 import { Warnings, NoArbiterWarning } from "../components/Warnings";
-import { MilestoneBadge, StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
+import { MILESTONE_STATUS, STATE_STATUS, MilestoneBadge, StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
 import { ShareKit } from "../components/ShareKit";
 import { CopyButton } from "../components/Copy";
 import { Qr } from "../components/Qr";
@@ -205,6 +205,38 @@ function SellerHistoryPanel({ data, decimals, symbol }: { data: InvoiceData; dec
   );
 }
 
+function MilestoneStepper({ data, amt }: { data: InvoiceData; amt: (v: bigint) => ReactNode }) {
+  const ms = data.milestones;
+  const total = data.invoice.totalAmount || 1n;
+  const pct = (v: bigint) => Number((v * 10000n) / total) / 100;
+  const rel = pct(data.invoice.releasedAmount);
+  const ref = pct(data.invoice.refundedAmount);
+  return (
+    <div className="stepper-wrap">
+      <div className="progress" aria-hidden="true">
+        <span className="progress-rel" style={{ width: `${rel}%` }} />
+        <span className="progress-ref" style={{ width: `${ref}%` }} />
+      </div>
+      <ol className="stepper" aria-label="Milestone progress">
+        {ms.map((m, k) => {
+          const name = milestoneStateName(m.state);
+          return (
+            <li key={k} className={`stepper-item ms-${name.toLowerCase()}`} data-status={MILESTONE_STATUS[name]}>
+              <span className="stepper-dot">{m.state === 0 ? <span className="num">{k + 1}</span> : <StatusIcon kind={MILESTONE_STATUS[name]} />}</span>
+              <span className="stepper-text">
+                <span className="stepper-label">{m.label}</span>
+                <span className="stepper-meta num">
+                  {amt(m.amount)} · {name}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function Receipt({ idParam }: { idParam: string }) {
   const target = useEscrowTarget();
   const id = /^\d+$/.test(idParam) && idParam !== "0" ? BigInt(idParam) : null;
@@ -284,7 +316,7 @@ function Receipt({ idParam }: { idParam: string }) {
     <div className="receipt-layout">
       <article className="card receipt-card" data-testid="receipt" aria-labelledby="receipt-title">
         <header className="receipt-head">
-          <div>
+          <div className="receipt-head-main">
             <p className="eyebrow-plain">
               Bulla receipt · {config.chain.name}
               {target.kind === "judge" && <span className="tag tag-demo">Demo escrow · DemoUSD, no value</span>}
@@ -293,7 +325,9 @@ function Receipt({ idParam }: { idParam: string }) {
               Invoice <span className="num">#{i.id.toString()}</span>
             </h1>
           </div>
-          <StatusBadge state={state} testid="state" />
+          <div className={`receipt-status receipt-status-${STATE_STATUS[state]}`}>
+            <StatusBadge state={state} testid="state" />
+          </div>
         </header>
         {i.memo ? <p className="memo">{i.memo}</p> : <p className="memo muted">No description</p>}
 
@@ -319,6 +353,22 @@ function Receipt({ idParam }: { idParam: string }) {
           </p>
         </div>
 
+        <MilestoneStepper data={data} amt={amt} />
+        {standIn && (
+          <p className="tag tag-demo" data-testid="standin-label">
+            Testnet stand-in for TapeOut (TapeOut has no testnet deployment)
+          </p>
+        )}
+
+        <div className="next-step no-print" id="next-step">
+          {t && escrow.data && <InvoiceActions data={data} token={t} escrow={escrow.data} chainNow={chainNow} />}
+        </div>
+
+        <details className="panel">
+          <summary>
+            <span>Parties and dates</span>
+            <span className="panel-hint num">Due {fmtTime(i.dueTimestamp)}</span>
+          </summary>
         <dl className="facts">
           <div>
             <dt>Due / refund time-lock</dt>
@@ -349,6 +399,7 @@ function Receipt({ idParam }: { idParam: string }) {
             </dd>
           </div>
         </dl>
+        </details>
 
         <h2 className="section-h">Milestones</h2>
         <div className="table-wrap">
@@ -421,12 +472,11 @@ function Receipt({ idParam }: { idParam: string }) {
         </dl>
         <p className="muted small">Refunds and mutual cancels return the unreleased amount with no fee.</p>
 
-        <h2 className="section-h">TapeOut binding and payout</h2>
-        {standIn && (
-          <p className="tag tag-demo" data-testid="standin-label">
-            Testnet stand-in for TapeOut (TapeOut has no testnet deployment)
-          </p>
-        )}
+        <details className="panel">
+          <summary>
+            <span>TapeOut binding and payout</span>
+            <span className="panel-hint">Circuit #{i.circuitId.toString()}{i.payToContainer ? " · container payout" : " · holder payout"}</span>
+          </summary>
         <dl className="record">
           <div>
             <dt>Payout target</dt>
@@ -486,6 +536,7 @@ function Receipt({ idParam }: { idParam: string }) {
             </div>
           )}
         </dl>
+        </details>
 
         {i.payToContainer && <WithdrawNote container={i.container} token={i.token} standIn={standIn} />}
 
@@ -504,12 +555,20 @@ function Receipt({ idParam }: { idParam: string }) {
       </article>
 
       <aside className="side no-print" aria-label="Receipt actions">
-        {t && escrow.data && <InvoiceActions data={data} token={t} escrow={escrow.data} chainNow={chainNow} />}
         <ShareKit link={link} invoiceId={i.id} memo={i.memo} amount={t ? fmtAmount(i.totalAmount, t.decimals, t.symbol) : ""} chainName={config.chain.name} />
         {t && <SellerHistoryPanel data={data} decimals={t.decimals} symbol={t.symbol} />}
         {!hasArbiter && (i.state === 1 || i.state === 2) && <NoArbiterWarning context="receipt" />}
         <Warnings />
       </aside>
+      <div className="mobile-bar no-print" aria-label="Receipt summary">
+        <div className="mobile-bar-info">
+          <span className="mobile-bar-state">{state}</span>
+          <span className="num mobile-bar-amt">{amt(i.totalAmount)}</span>
+        </div>
+        <a className="btn btn-primary" href="#next-step" onClick={(e) => { e.preventDefault(); document.getElementById("next-step")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }}>
+          Next step
+        </a>
+      </div>
     </div>
   );
 }

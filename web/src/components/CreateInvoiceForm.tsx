@@ -196,6 +196,10 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
     }
   }
 
+  const done1 = isAddress(buyer.trim()) && dueTs > nowTs;
+  const done2 = total !== null && total > 0n;
+  const done3 = !!(c && c.ok && c.youHold);
+  const buyerLive = buyer.trim() && !isAddress(buyer.trim()) ? "That does not look like a 0x address yet (42 characters)." : undefined;
   const blocked = !w.isConnected || w.wrongNetwork || busy || config.mock || !config.escrow;
   const described = (k: string, hasErr: boolean) => (hasErr ? `${fid(k)}-err` : `${fid(k)}-hint`);
   const payee = c && c.ok ? (payToContainer ? c.container : c.holder) : null;
@@ -209,6 +213,21 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
           <p className="muted">The buyer funds every milestone up front. You deliver and submit each one, the buyer releases each one. Anything not released by the due date goes back to the buyer.</p>
         </header>
 
+        <ol className="step-rail" aria-label="Progress">
+          {[
+            ["Client and amounts", done1],
+            ["Milestones", done2],
+            ["Payout and circuit", done3],
+          ].map(([label, ok], k) => (
+            <li key={k} className={ok ? "rail-done" : ""}>
+              <a href={`#step-${k + 1}`} onClick={(e) => (e.preventDefault(), document.getElementById(`step-${k + 1}`)?.scrollIntoView({ block: "start" }))}>
+                <span className="rail-n num">{ok ? "\u2713" : k + 1}</span>
+                <span className="rail-label">{label as string}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+
         {!config.escrow && (
           <div className="error" role="alert">
             BullaEscrow is not deployed on {config.chain.name} yet. Creating invoices is disabled until it is.
@@ -220,8 +239,69 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
           </div>
         )}
 
-        <fieldset>
-          <legend>Your TapeOut circuit</legend>
+        <fieldset className="step" id="step-1" data-done={done1 ? "true" : "false"}>
+          <legend className="step-legend">
+            <span className="step-n num" aria-hidden="true">{done1 ? "\u2713" : "1"}</span>
+            <span className="step-title">
+              <span className="step-kicker">Step 1 of 3</span>
+              Client and amounts
+            </span>
+          </legend>
+          <p className="step-sub muted small">Who pays, by when, and what the receipt says.</p>
+          <FormField id={fid("buyer")} label="Buyer address" hint="The only wallet that can fund, release, or claim the refund." error={errors.buyer ?? buyerLive}>
+            <input id={fid("buyer")} name="buyer" className="mono" placeholder="0x…" autoComplete="off" spellCheck={false} value={buyer} onChange={(e) => (setBuyer(e.target.value), clearErr("buyer"))} aria-invalid={!!(errors.buyer ?? buyerLive)} aria-describedby={described("buyer", !!(errors.buyer ?? buyerLive))} />
+          </FormField>
+          <FormField id={fid("due")} label="Due date and refund time-lock" hint="After this, anything not released can be refunded to the buyer. Leave review time." error={errors.due}>
+            <input id={fid("due")} name="due" type="datetime-local" className="num" value={due} onChange={(e) => (setDue(e.target.value), clearErr("due"))} aria-invalid={!!errors.due} aria-describedby={described("due", !!errors.due)} />
+          </FormField>
+          <FormField id={fid("memo")} label="Description" hint="Shown on the public receipt. Up to 140 characters.">
+            <input id={fid("memo")} name="memo" maxLength={140} placeholder="Logo design" value={memo} onChange={(e) => setMemo(e.target.value)} />
+          </FormField>
+        </fieldset>
+
+        <fieldset className="step" id="step-2" data-done={done2 ? "true" : "false"}>
+          <legend className="step-legend">
+            <span className="step-n num" aria-hidden="true">{done2 ? "\u2713" : "2"}</span>
+            <span className="step-title">
+              <span className="step-kicker">Step 2 of 3</span>
+              Milestones
+            </span>
+          </legend>
+          <p className="step-sub muted small">Up to 10 deliverables. The buyer funds all of them up front and releases each one.</p>
+          <ol className="ms-editor" data-testid="milestones-editor">
+            {rows.map((r, i) => (
+              <li key={i} className="ms-row">
+                <span className="ms-n num" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <input name={`label-${i}`} aria-label={`Milestone ${i + 1} label`} placeholder={i === 0 ? "Wireframes" : "Next deliverable"} maxLength={80} value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
+                <div className="input-affix ms-amount">
+                  <input name={`amount-${i}`} aria-label={`Milestone ${i + 1} amount in ${symbol}`} className="num" inputMode="decimal" placeholder="100.00" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
+                  <span className="affix" aria-hidden="true">
+                    {symbol}
+                  </span>
+                </div>
+                <button type="button" className="copy-btn" aria-label={`Remove milestone ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ol>
+          {errors.milestones && <p className="field-error">{errors.milestones}</p>}
+          <button type="button" className="btn btn-ghost btn-sm" disabled={rows.length >= MAX_MILESTONES} onClick={() => setRows((rs) => [...rs, { label: "", amount: "" }])} data-testid="add-milestone">
+            Add milestone ({rows.length}/{MAX_MILESTONES})
+          </button>
+        </fieldset>
+
+        <fieldset className="step" id="step-3" data-done={done3 ? "true" : "false"}>
+          <legend className="step-legend">
+            <span className="step-n num" aria-hidden="true">{done3 ? "\u2713" : "3"}</span>
+            <span className="step-title">
+              <span className="step-kicker">Step 3 of 3</span>
+              Payout and TapeOut circuit
+            </span>
+          </legend>
+          <p className="step-sub muted small">Bill with a circuit you hold, choose where releases land, and add an arbiter.</p>
           {standIn && (
             <p className="tag tag-demo" data-testid="standin-label">
               {config.chain.name}: testnet stand-in for TapeOut (TapeOut has no testnet deployment)
@@ -283,50 +363,10 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
               </span>
             </span>
           </label>
-        </fieldset>
-
-        <fieldset>
-          <legend>Milestones</legend>
-          <ol className="ms-editor" data-testid="milestones-editor">
-            {rows.map((r, i) => (
-              <li key={i} className="ms-row">
-                <span className="ms-n num" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <input name={`label-${i}`} aria-label={`Milestone ${i + 1} label`} placeholder={i === 0 ? "Wireframes" : "Next deliverable"} maxLength={80} value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
-                <div className="input-affix ms-amount">
-                  <input name={`amount-${i}`} aria-label={`Milestone ${i + 1} amount in ${symbol}`} className="num" inputMode="decimal" placeholder="100.00" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
-                  <span className="affix" aria-hidden="true">
-                    {symbol}
-                  </span>
-                </div>
-                <button type="button" className="copy-btn" aria-label={`Remove milestone ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}>
-                  ×
-                </button>
-              </li>
-            ))}
-          </ol>
-          {errors.milestones && <p className="field-error">{errors.milestones}</p>}
-          <button type="button" className="btn btn-ghost btn-sm" disabled={rows.length >= MAX_MILESTONES} onClick={() => setRows((rs) => [...rs, { label: "", amount: "" }])} data-testid="add-milestone">
-            Add milestone ({rows.length}/{MAX_MILESTONES})
-          </button>
-        </fieldset>
-
-        <fieldset>
-          <legend>Who and when</legend>
-          <FormField id={fid("buyer")} label="Buyer address" hint="The only wallet that can fund, release, or claim the refund." error={errors.buyer}>
-            <input id={fid("buyer")} name="buyer" className="mono" placeholder="0x…" autoComplete="off" spellCheck={false} value={buyer} onChange={(e) => (setBuyer(e.target.value), clearErr("buyer"))} aria-invalid={!!errors.buyer} aria-describedby={described("buyer", !!errors.buyer)} />
-          </FormField>
-          <FormField id={fid("due")} label="Due date and refund time-lock" hint="After this, anything not released can be refunded to the buyer. Leave review time." error={errors.due}>
-            <input id={fid("due")} name="due" type="datetime-local" className="num" value={due} onChange={(e) => (setDue(e.target.value), clearErr("due"))} aria-invalid={!!errors.due} aria-describedby={described("due", !!errors.due)} />
-          </FormField>
           <FormField id={fid("arbiter")} label="Arbiter (optional, recommended)" hint="Someone both sides trust. The buyer accepts them when funding. They can release or refund a submitted milestone, and take no fee." error={errors.arbiter}>
             <input id={fid("arbiter")} name="arbiter" className="mono" placeholder="0x… or leave empty" autoComplete="off" spellCheck={false} value={arbiter} onChange={(e) => (setArbiter(e.target.value), clearErr("arbiter"))} aria-invalid={!!errors.arbiter} aria-describedby={described("arbiter", !!errors.arbiter)} />
           </FormField>
           {!arbiter.trim() && <NoArbiterWarning context="create" />}
-          <FormField id={fid("memo")} label="Description" hint="Shown on the public receipt. Up to 140 characters.">
-            <input id={fid("memo")} name="memo" maxLength={140} placeholder="Logo design" value={memo} onChange={(e) => setMemo(e.target.value)} />
-          </FormField>
           <FormField id={fid("terms")} label="Agreed scope hash (optional)" hint="A bytes32, or any text (it is hashed).">
             <input id={fid("terms")} name="deliveryHash" className="mono" placeholder="0x… or text" autoComplete="off" spellCheck={false} value={deliveryHash} onChange={(e) => setDeliveryHash(e.target.value)} />
           </FormField>
@@ -347,7 +387,18 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
       </form>
 
       <aside className="card summary" aria-labelledby={`${uid}-sum`}>
-        <h2 id={`${uid}-sum`}>Summary</h2>
+        <p className="eyebrow-plain">Live summary</p>
+        <h2 id={`${uid}-sum`} className="summary-total num">{total !== null ? f(total) : `0 ${symbol}`}</h2>
+        <p className="summary-memo muted">{memo.trim() || "No description yet"}</p>
+        <ul className="summary-ms">
+          {rows.map((r, k) => (
+            <li key={k}>
+              <span className="num summary-ms-n">{k + 1}</span>
+              <span className="summary-ms-label">{r.label.trim() || "Untitled milestone"}</span>
+              <span className="num summary-ms-amt">{r.amount.trim() ? `${r.amount.trim()} ${symbol}` : "-"}</span>
+            </li>
+          ))}
+        </ul>
         <dl className="lines">
           <div>
             <dt>Buyer deposits ({rows.length} milestone{rows.length > 1 ? "s" : ""})</dt>

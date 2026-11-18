@@ -82,12 +82,15 @@ export function Landing() {
   return (
     <div className="landing">
       <section className="hero" aria-labelledby="hero-title">
+        <div className="hero-bg" aria-hidden="true" />
         <div className="hero-copy">
           <p className="eyebrow">
             <img src="./logo.png" alt="" width={18} height={18} />
             Milestone escrow on {network}
           </p>
-          <h1 id="hero-title">Get paid for milestones, without chasing.</h1>
+          <h1 id="hero-title" className="hero-title">
+            Get paid for milestones, <span className="hero-accent">without chasing.</span>
+          </h1>
           <p className="lead">
             Your client funds the invoice up front in USDC. You deliver and record proof. They release. If nothing is released by the due date, a time-lock refunds them. Anyone can check the receipt, no wallet
             needed.
