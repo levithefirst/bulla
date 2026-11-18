@@ -111,9 +111,10 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         string memo;
     }
 
-    /// @notice Public payment history of one TapeOut circuit on this escrow (no event scan needed).
+    /// @notice On-chain activity of one TapeOut circuit on this escrow (no event scan needed). Only funded
+    /// invoices count: unfunded drafts are excluded. Not a reputation score: a seller can bill a wallet they control.
     struct CircuitStats {
-        uint64 invoices;
+        uint64 fundedInvoices;
         uint64 releasedMilestones;
         uint64 refundedMilestones;
         uint256 releasedAmount;
@@ -200,6 +201,8 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     event Refunded(uint256 indexed id, address indexed buyer, uint256 amount);
     /// @notice `party` consented to cancel.
     event CancelConsentGiven(uint256 indexed id, address indexed party);
+    /// @notice `party`'s cancel consent was withdrawn: by that party, or cleared when the invoice was funded.
+    event CancelConsentRevoked(uint256 indexed id, address indexed party);
     /// @notice Both parties consented; `refundedToBuyer` was returned (state Cancelled).
     event InvoiceCancelled(uint256 indexed id, uint256 refundedToBuyer);
     /// @notice The owner changed the fee recipient.
@@ -255,6 +258,8 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
     error NotYetDue(uint64 dueTimestamp);
     /// @notice This party already consented to cancel.
     error AlreadyConsented();
+    /// @notice This party has no cancel consent to revoke.
+    error NoConsentToRevoke();
 
     /// @param token_ The escrow ERC-20 (USDC on X Layer mainnet). Immutable.
     /// @param opener_ TapeOut container opener. Immutable.
@@ -323,7 +328,6 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         inv.state = State.Draft;
         inv.termsHash = p.termsHash;
         inv.memo = p.memo;
-        _circuitStats[p.processor][p.circuitId].invoices += 1;
 
         emit InvoiceCreated(id, msg.sender, p.buyer, p.token, total, uint8(n), p.dueTimestamp, p.termsHash, p.memo);
         emit CircuitBound(id, p.processor, p.circuitId, container, p.payToContainer);
@@ -369,6 +373,17 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         inv.state = State.Funded;
         inv.fundedAt = uint64(block.timestamp);
         totalHeld += amount;
+        _circuitStats[inv.processor][inv.circuitId].fundedInvoices += 1;
+        // Consent given on the draft does not carry over to the funded invoice: otherwise one party could
+        // later cancel alone and claw back delivered (submitted) milestones.
+        if (inv.sellerCancelConsent) {
+            inv.sellerCancelConsent = false;
+            emit CancelConsentRevoked(id, inv.seller);
+        }
+        if (inv.buyerCancelConsent) {
+            inv.buyerCancelConsent = false;
+            emit CancelConsentRevoked(id, inv.buyer);
+        }
 
         uint256 beforeBal = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
@@ -474,6 +489,24 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         }
     }
 
+    /// @notice Withdraw this party's cancel consent while the invoice is still open (Draft or Funded).
+    /// @param id Invoice id.
+    function revokeCancelConsent(uint256 id) external {
+        Invoice storage inv = _get(id);
+        State s = inv.state;
+        if (s != State.Draft && s != State.Funded) revert WrongState(s);
+        if (msg.sender == inv.seller) {
+            if (!inv.sellerCancelConsent) revert NoConsentToRevoke();
+            inv.sellerCancelConsent = false;
+        } else if (msg.sender == inv.buyer) {
+            if (!inv.buyerCancelConsent) revert NoConsentToRevoke();
+            inv.buyerCancelConsent = false;
+        } else {
+            revert NotParty();
+        }
+        emit CancelConsentRevoked(id, msg.sender);
+    }
+
     // ------------------------------------------------------------------
     // Owner (fee recipient only)
     // ------------------------------------------------------------------
@@ -512,8 +545,8 @@ contract BullaEscrow is ReentrancyGuard, Ownable {
         return _containerOpened(_get(id));
     }
 
-    /// @notice Payment history of a TapeOut circuit on this escrow: invoices billed, milestones released and
-    /// refunded, and gross amount released. Counted on chain, so no log scan is needed.
+    /// @notice On-chain activity of a TapeOut circuit on this escrow: funded invoices, milestones released and
+    /// refunded, and gross amount released. Unfunded drafts are not counted. Not a reputation score.
     function circuitStats(address processor, uint256 circuitId) external view returns (CircuitStats memory) {
         return _circuitStats[processor][circuitId];
     }

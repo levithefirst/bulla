@@ -138,6 +138,11 @@ export const bullaEscrowAbi = [
   },
   {
     "inputs": [],
+    "name": "NoConsentToRevoke",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NotArbiter",
     "type": "error"
   },
@@ -332,6 +337,25 @@ export const bullaEscrowAbi = [
       }
     ],
     "name": "CancelConsentGiven",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "party",
+        "type": "address"
+      }
+    ],
+    "name": "CancelConsentRevoked",
     "type": "event"
   },
   {
@@ -887,7 +911,7 @@ export const bullaEscrowAbi = [
         "components": [
           {
             "internalType": "uint64",
-            "name": "invoices",
+            "name": "fundedInvoices",
             "type": "uint64"
           },
           {
@@ -1387,6 +1411,19 @@ export const bullaEscrowAbi = [
   {
     "inputs": [],
     "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "revokeCancelConsent",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

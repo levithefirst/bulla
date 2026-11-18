@@ -298,14 +298,14 @@ describe("BullaEscrow v2", () => {
   });
 
   describe("circuit stats (on-chain payment history)", () => {
-    it("counts invoices, released and refunded milestones and released volume per circuit", async () => {
+    it("counts funded invoices (not drafts), released and refunded milestones and released volume per circuit", async () => {
       const f = await loadFixture(deployFixture);
       const pa = await f.processor.getAddress();
       const a = await createFunded(f, { arbiter: f.arbiter.address, dueTimestamp: (await time.latest()) + 3600 });
       await f.escrow.connect(f.buyer).releaseMilestone(a.id, 0);
       await create(f);
       let st = await f.escrow.circuitStats(pa, 1);
-      expect(st.invoices).to.equal(2n);
+      expect(st.fundedInvoices).to.equal(1n); // the second invoice is an unfunded draft: not counted
       expect(st.releasedMilestones).to.equal(1n);
       expect(st.releasedAmount).to.equal(D(100));
       await time.increaseTo(a.due);
@@ -313,7 +313,7 @@ describe("BullaEscrow v2", () => {
       st = await f.escrow.circuitStats(pa, 1);
       expect(st.refundedMilestones).to.equal(1n);
       const other = await f.escrow.circuitStats(pa, 2);
-      expect(other.invoices).to.equal(0n);
+      expect(other.fundedInvoices).to.equal(0n);
     });
   });
 
@@ -448,6 +448,57 @@ describe("BullaEscrow v2", () => {
       expect((await f.token.balanceOf(f.buyer.address)) - before).to.equal(D(300));
       expect(await f.token.balanceOf(f.feeRecipient.address)).to.equal(feeBefore);
       expect(await f.token.balanceOf(await f.escrow.getAddress())).to.equal(0n);
+    });
+
+    it("consent given on the draft is cleared at funding: the buyer cannot later cancel alone", async () => {
+      const f = await loadFixture(deployFixture);
+      const { id } = await create(f);
+      await f.escrow.connect(f.seller).mutualCancel(id);
+      expect((await f.escrow.getInvoice(id)).sellerCancelConsent).to.equal(true);
+      await f.token.connect(f.buyer).approve(await f.escrow.getAddress(), D(1000));
+      await expect(f.escrow.connect(f.buyer).fundInvoice(id, ethers.ZeroAddress)).to.emit(f.escrow, "CancelConsentRevoked").withArgs(id, f.seller.address);
+      const inv = await f.escrow.getInvoice(id);
+      expect([inv.sellerCancelConsent, inv.buyerCancelConsent]).to.deep.equal([false, false]);
+      await f.escrow.connect(f.seller).submitMilestone(id, 0, ethers.id("delivered"), "");
+      // The buyer's consent alone no longer cancels: the submitted milestone stays in escrow.
+      await expect(f.escrow.connect(f.buyer).mutualCancel(id)).to.emit(f.escrow, "CancelConsentGiven").and.not.to.emit(f.escrow, "InvoiceCancelled");
+      expect((await f.escrow.getInvoice(id)).state).to.equal(S.Funded);
+      expect((await f.escrow.getMilestones(id))[0].state).to.equal(1n);
+    });
+
+    it("buyer consent on the draft is also cleared at funding", async () => {
+      const f = await loadFixture(deployFixture);
+      const { id } = await create(f);
+      await f.escrow.connect(f.buyer).mutualCancel(id);
+      await f.token.connect(f.buyer).approve(await f.escrow.getAddress(), D(1000));
+      await expect(f.escrow.connect(f.buyer).fundInvoice(id, ethers.ZeroAddress)).to.emit(f.escrow, "CancelConsentRevoked").withArgs(id, f.buyer.address);
+      await expect(f.escrow.connect(f.seller).mutualCancel(id)).not.to.emit(f.escrow, "InvoiceCancelled");
+      expect((await f.escrow.getInvoice(id)).state).to.equal(S.Funded);
+    });
+
+    it("revokeCancelConsent: a party withdraws its consent, then the other side alone cannot cancel", async () => {
+      const f = await loadFixture(deployFixture);
+      const { id } = await createFunded(f);
+      await f.escrow.connect(f.seller).mutualCancel(id);
+      await expect(f.escrow.connect(f.seller).revokeCancelConsent(id)).to.emit(f.escrow, "CancelConsentRevoked").withArgs(id, f.seller.address);
+      expect((await f.escrow.getInvoice(id)).sellerCancelConsent).to.equal(false);
+      await expect(f.escrow.connect(f.buyer).mutualCancel(id)).not.to.emit(f.escrow, "InvoiceCancelled");
+      expect((await f.escrow.getInvoice(id)).state).to.equal(S.Funded);
+      // Consent can be given again after revoking.
+      await expect(f.escrow.connect(f.seller).mutualCancel(id)).to.emit(f.escrow, "InvoiceCancelled");
+    });
+
+    it("revokeCancelConsent reverts without consent, for strangers, and on closed invoices", async () => {
+      const f = await loadFixture(deployFixture);
+      const { id } = await create(f);
+      await expect(f.escrow.connect(f.buyer).revokeCancelConsent(id)).to.be.revertedWithCustomError(f.escrow, "NoConsentToRevoke");
+      await expect(f.escrow.connect(f.stranger).revokeCancelConsent(id)).to.be.revertedWithCustomError(f.escrow, "NotParty");
+      await f.escrow.connect(f.buyer).mutualCancel(id);
+      await expect(f.escrow.connect(f.buyer).revokeCancelConsent(id)).to.emit(f.escrow, "CancelConsentRevoked");
+      await f.escrow.connect(f.buyer).mutualCancel(id);
+      await f.escrow.connect(f.seller).mutualCancel(id);
+      await expect(f.escrow.connect(f.buyer).revokeCancelConsent(id)).to.be.revertedWithCustomError(f.escrow, "WrongState").withArgs(S.Cancelled);
+      await expect(f.escrow.revokeCancelConsent(999)).to.be.revertedWithCustomError(f.escrow, "InvoiceNotFound");
     });
 
     it("one-sided consent does not block releases; closed invoices cannot be cancelled", async () => {

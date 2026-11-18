@@ -9,7 +9,7 @@ import type { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signer
  *   I1  token.balanceOf(escrow) == totalHeld == sum(unresolved milestone amounts of Funded invoices)
  *   I2  no invoice or milestone state goes backwards; closed states never change
  *   I3  released + refunded <= total; a Completed invoice has released + refunded == total
- *   I5  circuitStats(processor, id) equals the counts and released volume derived from the invoices
+ *   I5  circuitStats(processor, id) equals the counts and released volume derived from the invoices (funded only)
  * Checked on every successful release:
  *   I4  fee == floor(amount * feeBps / 10000), the payout target receives amount - fee, and the target is
  *       the container (payToContainer and opened) or the live circuit holder
@@ -119,7 +119,7 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
           const inv = await escrow.getInvoice(id);
           const k = `${inv.processor}:${inv.circuitId}`;
           const a = agg.get(k) ?? { inv: 0n, rel: 0n, relAmt: 0n, ref: 0n };
-          a.inv += 1n;
+          if (inv.fundedAt > 0n) a.inv += 1n; // only funded invoices count; unfunded drafts are excluded
           for (const m of await escrow.getMilestones(id)) {
             if (Number(m.state) === 2) (a.rel += 1n), (a.relAmt += m.amount);
             if (Number(m.state) === 3) a.ref += 1n;
@@ -129,7 +129,7 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
         for (const [k, a] of agg) {
           const [pr, cid] = k.split(":");
           const st = await escrow.circuitStats(pr, BigInt(cid));
-          expect([st.invoices, st.releasedMilestones, st.releasedAmount, st.refundedMilestones], `step ${step}: circuit stats for ${k}`).to.deep.equal([a.inv, a.rel, a.relAmt, a.ref]);
+          expect([st.fundedInvoices, st.releasedMilestones, st.releasedAmount, st.refundedMilestones], `step ${step}: circuit stats for ${k}`).to.deep.equal([a.inv, a.rel, a.relAmt, a.ref]);
         }
         const held = await escrow.totalHeld();
         expect(held, `step ${step}: totalHeld != unresolved`).to.equal(sum);
@@ -156,7 +156,7 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
         const find = (a?: string) => everyone.find((x) => x.address === a);
         const party = (p?: HardhatEthersSigner) => (p && r() < 0.8 ? p : pick(everyone));
         const mi = ms.length ? Math.floor(r() * (ms.length + (r() < 0.1 ? 1 : 0))) : 0;
-        const action = n === 0 ? "create" : pick(["create", "create", "fund", "fund", "submit", "submit", "release", "release", "arbRelease", "arbRefund", "refund", "cancel", "warp", "transfer", "open"] as const);
+        const action = n === 0 ? "create" : pick(["create", "create", "fund", "fund", "submit", "submit", "release", "release", "arbRelease", "arbRefund", "refund", "cancel", "cancel", "revoke", "warp", "transfer", "open"] as const);
         const now = (await ethers.provider.getBlock("latest"))!.timestamp;
 
         if (action === "create") {
@@ -220,6 +220,9 @@ describe("BullaEscrow v2 fuzz and invariants", function () {
             else if (action === "refund" || (action === "cancel" && st === S.Cancelled && Number(inv!.state) === S.Funded)) expect(delta).to.equal(before.unresolved);
             expect(await token.balanceOf(feeRecipient.address)).to.equal(before.fb);
           }
+        } else if (action === "revoke") {
+          const ok = await attempt(() => escrow.connect(party(r() < 0.5 ? find(inv?.seller) : find(inv?.buyer))).revokeCancelConsent(id));
+          if (ok) expect(Number((await escrow.getInvoice(id)).state)).to.be.oneOf([S.Draft, S.Funded]);
         } else if (action === "open") {
           await attempt(() => opener.open(proc.getAddress(), pick([1, 2])));
         } else if (action === "transfer") {
