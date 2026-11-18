@@ -35,3 +35,16 @@ export function Warnings() {
     </div>
   );
 }
+
+/** Without an arbiter, the due-date refund also covers submitted but unreleased milestones. */
+export function NoArbiterWarning({ context }: { context: "create" | "receipt" }) {
+  return (
+    <div className="warn" data-testid="warn-no-arbiter" role="note">
+      <Icon />
+      <p>
+        <strong>No arbiter{context === "create" ? " set" : " on this invoice"}.</strong> After the due date the buyer can refund every milestone that is not released, including ones the seller already
+        submitted. {context === "create" ? "We recommend naming an arbiter both sides trust, and leaving review time before the due date." : "Sellers: ask for releases before the due date."}
+      </p>
+    </div>
+  );
+}

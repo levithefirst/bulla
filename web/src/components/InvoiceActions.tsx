@@ -21,7 +21,7 @@ function useEscrowWrite() {
   const w = useWallet();
   const t = useEscrowTarget();
   return {
-    one: (functionName: "claimRefund" | "mutualCancel", id: bigint) => sendWrite(w, { address: t.address!, abi: bullaEscrowAbi, functionName, args: [id] }),
+    one: (functionName: "claimRefund" | "mutualCancel" | "revokeCancelConsent", id: bigint) => sendWrite(w, { address: t.address!, abi: bullaEscrowAbi, functionName, args: [id] }),
     ms: (functionName: "releaseMilestone" | "arbiterRelease" | "arbiterRefund", id: bigint, index: number) => sendWrite(w, { address: t.address!, abi: bullaEscrowAbi, functionName, args: [id, BigInt(index)] }),
   };
 }
@@ -280,14 +280,19 @@ export function MutualCancelButton({ data, token, me }: Props & { me: "seller" |
   return (
     <div className="action action-quiet" data-testid="cancel-panel">
       <h3>Mutual cancel</h3>
-      <p className="muted">Needs both parties. {funded ? `The buyer gets the unreleased ${fmtAmount(remainder, token.decimals, token.symbol)} back, no fee.` : "Nothing is funded yet, so nothing moves."}</p>
+      <p className="muted">Needs both parties. Consent given before funding is cleared when the buyer funds. {funded ? `The buyer gets the unreleased ${fmtAmount(remainder, token.decimals, token.symbol)} back, no fee.` : "Nothing is funded yet, so nothing moves."}</p>
       <p>
         Seller consent: <strong>{inv.sellerCancelConsent ? "yes" : "no"}</strong> · Buyer consent: <strong>{inv.buyerCancelConsent ? "yes" : "no"}</strong>
       </p>
       {mine ? (
-        <p className="muted" data-testid="cancel-waiting">
-          You consented. Waiting for the {other}.
-        </p>
+        <>
+          <p className="muted" data-testid="cancel-waiting">
+            You consented. Waiting for the {other}.
+          </p>
+          <button className="btn" data-testid="cancel-revoke" disabled={busy} onClick={() => run("Withdraw cancel consent", () => write.one("revokeCancelConsent", inv.id), () => invalidate(inv.id))}>
+            Withdraw my consent
+          </button>
+        </>
       ) : (
         <button className="btn" data-testid="cancel-btn" disabled={busy} onClick={() => run(theirs ? "Cancel invoice" : "Consent to cancel", () => write.one("mutualCancel", inv.id), () => invalidate(inv.id))}>
           {theirs ? `Confirm cancel${funded ? " and refund the remainder" : ""}` : "Consent to cancel"}

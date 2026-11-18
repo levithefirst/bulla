@@ -207,10 +207,10 @@ export function quoteFee(amount: bigint, feeBps: number) {
   return { fee, net: amount - fee };
 }
 
-export type SellerHistory = { invoices: number; releasedMilestones: number; releasedGross: bigint; refundedMilestones: number };
+export type SellerHistory = { fundedInvoices: number; releasedMilestones: number; releasedGross: bigint; refundedMilestones: number };
 
 /**
- * Public payment history of a TapeOut circuit on this escrow, from the contract's on-chain `circuitStats`
+ * On-chain activity of a TapeOut circuit on this escrow (funded invoices only; unfunded drafts are excluded), from the contract's on-chain `circuitStats`
  * counters (no event scan: the public X Layer RPC rejects eth_getLogs, docs/research.md section 9).
  */
 export function useSellerHistory(processor?: Address, circuitId?: bigint) {
@@ -220,7 +220,7 @@ export function useSellerHistory(processor?: Address, circuitId?: bigint) {
     enabled: !!processor && circuitId !== undefined && !config.mock && !!t.address,
     queryFn: async (): Promise<SellerHistory> => {
       const st = await ethCall(client, { address: t.address!, abi: bullaEscrowAbi, functionName: "circuitStats", args: [processor!, circuitId!] });
-      return { invoices: Number(st.invoices), releasedMilestones: Number(st.releasedMilestones), releasedGross: st.releasedAmount, refundedMilestones: Number(st.refundedMilestones) };
+      return { fundedInvoices: Number(st.fundedInvoices), releasedMilestones: Number(st.releasedMilestones), releasedGross: st.releasedAmount, refundedMilestones: Number(st.refundedMilestones) };
     },
     refetchInterval: 15_000,
     retry: 0,

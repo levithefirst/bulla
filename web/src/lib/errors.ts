@@ -17,6 +17,7 @@ const FRIENDLY: Record<string, string> = {
   PastDue: "The due date has passed.",
   NotYetDue: "The refund time-lock has not passed yet.",
   AlreadyConsented: "You already consented to cancel.",
+  NoConsentToRevoke: "You have no cancel consent to withdraw.",
   ReentrancyGuardReentrantCall: "Re-entrant call blocked.",
   ERC20InsufficientAllowance: "Token allowance too low. Approve first.",
   ERC20InsufficientBalance: "Not enough token balance.",

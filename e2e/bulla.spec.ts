@@ -62,7 +62,11 @@ async function createInvoice(
   await expect(seller.getByTestId("circuit-ok")).toHaveText("You hold circuit #1");
   await expect(seller.getByTestId("container-address")).toHaveText(/^0x[0-9a-fA-F]{40}$/);
   if (opts.payToContainer) await seller.getByTestId("pay-to-container").check();
-  if (opts.arbiter) await seller.locator('input[name="arbiter"]').fill(opts.arbiter);
+  await expect(seller.getByTestId("warn-no-arbiter")).toBeVisible();
+  if (opts.arbiter) {
+    await seller.locator('input[name="arbiter"]').fill(opts.arbiter);
+    await expect(seller.getByTestId("warn-no-arbiter")).toHaveCount(0);
+  }
   await seller.locator('input[name="memo"]').fill(memo);
   await expect(seller.getByTestId("warn-unaudited")).toBeVisible();
   await expect(seller.getByTestId("warn-circuit-holder")).toBeVisible();
@@ -190,6 +194,12 @@ test("mutual cancel after funding refunds buyer", async ({ browser }) => {
   const before = await bal(keys.buyer.address);
 
   await seller.reload();
+  await expect(seller.getByTestId("warn-no-arbiter")).toBeVisible();
+  await seller.getByTestId("cancel-btn").click();
+  await expect(seller.getByTestId("cancel-waiting")).toBeVisible();
+  // Withdraw consent, then give it again: the revoke path works from the UI.
+  await seller.getByTestId("cancel-revoke").click();
+  await expect(seller.getByTestId("cancel-btn")).toContainText("Consent to cancel");
   await seller.getByTestId("cancel-btn").click();
   await expect(seller.getByTestId("cancel-waiting")).toBeVisible();
   await buyer.reload();
@@ -285,6 +295,7 @@ test("two milestones paid into the TapeOut container, buyer release + arbiter re
   await expect(arbiter.getByTestId("state")).toHaveText("Completed");
   expect((await bal(keys.buyer.address)) - buyerBefore).toBe(60_000_000n);
   await expect(arbiter.getByTestId("history-released")).not.toHaveText("0");
+  await expect(arbiter.getByTestId("seller-history").getByRole("heading")).toHaveText("On-chain activity");
 });
 
 test("responsive at 375px and keyboard skip link, no wallet", async ({ browser }) => {

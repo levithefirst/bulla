@@ -169,7 +169,7 @@ export function Landing() {
           <h2 className="section-title">Where TapeOut fits</h2>
           <p>
             Your TapeOut circuit is your business account. The escrow only lets the circuit's holder bill with it (checked with ownerOf), pays each release to the holder or, if you choose, into the circuit's
-            container, and the receipt shows the circuit's public payment history. The app is a static site meant for DeWEB, so receipts can be served from {network}, not from a server we run.
+            container, and the receipt shows the circuit's on-chain activity. The app is a static site meant for DeWEB, so receipts can be served from {network}, not from a server we run.
           </p>
           <Warnings />
         </div>

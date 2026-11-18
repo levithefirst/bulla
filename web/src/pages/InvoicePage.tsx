@@ -23,7 +23,7 @@ import { useTapeName } from "../lib/tapeout";
 import { QueryProvider } from "../lib/query";
 import { navigate } from "../router";
 import { InvoiceActions } from "../components/InvoiceActions";
-import { Warnings } from "../components/Warnings";
+import { Warnings, NoArbiterWarning } from "../components/Warnings";
 import { MilestoneBadge, StatusBadge, StatusIcon, type StatusKind } from "../components/Status";
 import { ShareKit } from "../components/ShareKit";
 import { CopyButton } from "../components/Copy";
@@ -168,18 +168,19 @@ function SellerHistoryPanel({ data, decimals, symbol }: { data: InvoiceData; dec
   const h = useSellerHistory(data.invoice.processor, data.invoice.circuitId);
   return (
     <section className="card" aria-labelledby="history-title" data-testid="seller-history">
-      <h2 id="history-title">Seller history</h2>
+      <h2 id="history-title">On-chain activity</h2>
       <p className="muted small">
-        Circuit #{data.invoice.circuitId.toString()} on processor <span className="mono">{shortAddr(data.invoice.processor)}</span>, counted on chain by this escrow. No backend.
+        Circuit #{data.invoice.circuitId.toString()} on processor <span className="mono">{shortAddr(data.invoice.processor)}</span>, counted on chain by this escrow. Funded invoices only; unfunded drafts are not
+        counted. This is activity, not a reputation score: a seller can bill a wallet they control.
       </p>
-      {h.isLoading && <p className="muted small">Reading events…</p>}
+      {h.isLoading && <p className="muted small">Reading on-chain counters…</p>}
       {h.isError && <p className="muted small">History unavailable (RPC error).</p>}
       {h.data && (
         <dl className="lines">
           <div>
-            <dt>Invoices billed with this circuit</dt>
+            <dt>Funded invoices billed with this circuit</dt>
             <dd className="num" data-testid="history-invoices">
-              {h.data.invoices}
+              {h.data.fundedInvoices}
             </dd>
           </div>
           <div>
@@ -458,7 +459,7 @@ function Receipt({ idParam }: { idParam: string }) {
           </div>
           <div>
             <dt>Arbiter</dt>
-            <dd data-testid="arbiter">{hasArbiter ? <Value v={i.arbiter} label="arbiter address" /> : <span className="muted">None. Disputes end at the time-lock or a mutual cancel.</span>}</dd>
+            <dd data-testid="arbiter">{hasArbiter ? <Value v={i.arbiter} label="arbiter address" /> : <span className="muted">None. After the due date the buyer can refund every unreleased milestone, including submitted ones.</span>}</dd>
           </div>
           {i.termsHash !== ZERO32 && (
             <div>
@@ -506,6 +507,7 @@ function Receipt({ idParam }: { idParam: string }) {
         {t && escrow.data && <InvoiceActions data={data} token={t} escrow={escrow.data} chainNow={chainNow} />}
         <ShareKit link={link} invoiceId={i.id} memo={i.memo} amount={t ? fmtAmount(i.totalAmount, t.decimals, t.symbol) : ""} chainName={config.chain.name} />
         {t && <SellerHistoryPanel data={data} decimals={t.decimals} symbol={t.symbol} />}
+        {!hasArbiter && (i.state === 1 || i.state === 2) && <NoArbiterWarning context="receipt" />}
         <Warnings />
       </aside>
     </div>

@@ -13,7 +13,7 @@ import { sendWrite } from "../lib/write";
 import { parseError } from "../lib/errors";
 import { notifyCounterparty } from "../lib/notify";
 import { useToasts } from "./Toasts";
-import { UnauditedWarning, CircuitHolderWarning } from "./Warnings";
+import { UnauditedWarning, CircuitHolderWarning, NoArbiterWarning } from "./Warnings";
 
 function toLocalInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -320,9 +320,10 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
           <FormField id={fid("due")} label="Due date and refund time-lock" hint="After this, anything not released can be refunded to the buyer. Leave review time." error={errors.due}>
             <input id={fid("due")} name="due" type="datetime-local" className="num" value={due} onChange={(e) => (setDue(e.target.value), clearErr("due"))} aria-invalid={!!errors.due} aria-describedby={described("due", !!errors.due)} />
           </FormField>
-          <FormField id={fid("arbiter")} label="Arbiter (optional)" hint="Someone both sides trust. The buyer accepts them when funding. They can release or refund a submitted milestone, and take no fee." error={errors.arbiter}>
+          <FormField id={fid("arbiter")} label="Arbiter (optional, recommended)" hint="Someone both sides trust. The buyer accepts them when funding. They can release or refund a submitted milestone, and take no fee." error={errors.arbiter}>
             <input id={fid("arbiter")} name="arbiter" className="mono" placeholder="0x… or leave empty" autoComplete="off" spellCheck={false} value={arbiter} onChange={(e) => (setArbiter(e.target.value), clearErr("arbiter"))} aria-invalid={!!errors.arbiter} aria-describedby={described("arbiter", !!errors.arbiter)} />
           </FormField>
+          {!arbiter.trim() && <NoArbiterWarning context="create" />}
           <FormField id={fid("memo")} label="Description" hint="Shown on the public receipt. Up to 140 characters.">
             <input id={fid("memo")} name="memo" maxLength={140} placeholder="Logo design" value={memo} onChange={(e) => setMemo(e.target.value)} />
           </FormField>
