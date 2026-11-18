@@ -10,7 +10,7 @@ Freelancers: stop chasing invoices.
 
 Bulla is milestone escrow on @XLayerOfficial. Your client funds in USDC up front, you deliver, they release. If nothing is released by the due date, a time-lock refunds them.
 
-Try the full loop in one tap on X Layer testnet, no wallet needed: https://usebulla.vercel.app
+Try the full loop in one tap on X Layer testnet, no wallet needed: https://try-usebulla.vercel.app
 
 Built for #TapeOut Accelerate. Receipts live on DeWEB.
 
@@ -22,7 +22,7 @@ Built for #TapeOut Accelerate. Receipts live on DeWEB.
 
 2/ Bulla flips the default. The client locks USDC in an escrow on X Layer before work starts. You deliver and record a hash of the work. They release. Miss the due date and the client is refunded automatically.
 
-3/ Try it in one tap, no wallet: two demo wallets are created in your browser and a real escrow runs on X Layer testnet, lock to release, every step linked on the OKX explorer. https://usebulla.vercel.app
+3/ Try it in one tap, no wallet: two demo wallets are created in your browser and a real escrow runs on X Layer testnet, lock to release, every step linked on the OKX explorer. https://try-usebulla.vercel.app
 
 4/ Every invoice gets a public receipt anyone can open: amounts, the 0.5% fee, delivery hash, timeline, QR code. No account, no backend.
 

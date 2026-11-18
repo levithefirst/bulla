@@ -21,7 +21,7 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 | X Layer testnet / mainnet deploy | v2 deployed: mainnet `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (Sourcify exact match), testnet `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, judge `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4`; a superseded v1 escrow on mainnet is ignored |
 | TapeOut circuit + container | circuit #1 on processor #397 (Tapee), container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` opened; mainnet demo invoice #1 paid 0.995 USDC into it |
 | DeWEB publish | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) |
-| Mainnet web app (HTTPS mirror) | https://app-usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://app-usebulla.vercel.app/#/invoice/1 (DeWEB: https://1-2-397.tapekit.org/#/invoice/1) |
+| Mainnet web app | https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1 (DeWEB: https://1-2-397.tapekit.org/#/invoice/1) |
 
 Everything still open is listed in [`docs/HANDOFF.md`](docs/HANDOFF.md). `npm run release:check` fails until it is done.
 
@@ -124,7 +124,7 @@ Copy `.env.example` to `.env` (gitignored). Never commit keys.
 | `VITE_ESCROW_ADDRESS`, `VITE_ESCROW_TOKEN`, `VITE_RPC_URL` | web build | override `contracts/deployments.json` |
 | `VITE_DEPLOY_BLOCK` | web build | override the block the receipt timeline scans logs from |
 | `VITE_DEMO_GAS_TANK_KEY` | judge build only | **testnet-only** throwaway gas-tank key; embedded in the judge build; mainnet builds refuse it |
-| `VITE_JUDGE_URL` | mainnet build | link "Try it now" to the hosted testnet judge build (`https://usebulla.vercel.app`) |
+| `VITE_JUDGE_URL` | mainnet build | link "Try it now" to the hosted testnet judge build (`https://try-usebulla.vercel.app`) |
 | `VITE_JUDGE_ESCROW_ADDRESS`, `VITE_JUDGE_TOKEN`, `VITE_JUDGE_DEPLOY_BLOCK` | judge build | override `deployments.json` `xlayerTestnet.judge` |
 | `VITE_TAPEOUT_OPENER`, `VITE_TAPEOUT_FACTORY`, `VITE_TAPEOUT_PROCESSOR` (+ `VITE_JUDGE_TAPEOUT_*`) | localhost / testnet build only | TapeOut stand-in addresses; a mainnet build refuses them |
 | `VITE_DEMO_RUN_CAP_WEI` | judge build | per-run cap on what the demo tank may send (default: 3,000,000 gas at the current price) |
