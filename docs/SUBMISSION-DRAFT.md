@@ -10,7 +10,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 
 ## 1. Try it in one tap
 
-- Judge URL (X Layer testnet, no wallet needed): `<<JUDGE_URL>>`
+- Judge URL (X Layer testnet, no wallet needed): `https://bulla-judge.vercel.app`
 - What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to the OKX explorer.
 - Measured: `<<TESTNET_JUDGE_SECONDS>>` seconds on X Layer testnet (from `npm run e2e:testnet`). On a local node the same 12-transaction loop takes 0.7 s in-app (664 ms) and 1.0 s from the tap (982 ms) (`e2e/judge-mode.spec.ts`, 18 Nov 2026). Use only the measured testnet number in the form.
 
