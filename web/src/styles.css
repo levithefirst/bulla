@@ -472,7 +472,7 @@ legend { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; text-trans
 
 /* ---------- UI upgrade layer: bold editorial pass ---------- */
 body { font-size: 15.5px; }
-.app { position: relative; isolation: isolate; }
+.app { position: relative; isolation: isolate; overflow-x: clip; }
 .topbar { position: sticky; top: 0; z-index: 30; backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--border-subtle); }
 .brand span { font-weight: 700; letter-spacing: -0.04em; font-size: 1.15rem; }
 .nav-link { font-weight: 550; }
