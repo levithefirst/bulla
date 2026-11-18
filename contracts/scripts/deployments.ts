@@ -16,7 +16,9 @@ export function writeDeployment(entry: DeploymentEntry, file = DEPLOYMENTS_PATH)
   const problems = validateEntry(entry);
   if (problems.length) throw new Error(`refusing to write deployments.json: ${problems.join("; ")}`);
   const data = readDeployments(file);
-  data.networks[entry.network] = entry;
+  // Keep an existing judge-mode block: deploy:testnet runs after deploy:judge and must not erase it.
+  const prevJudge = data.networks[entry.network]?.judge;
+  data.networks[entry.network] = !entry.judge && prevJudge ? { ...entry, judge: prevJudge } : entry;
   fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
   console.log(`wrote ${entry.network} -> ${file}`);
 }
