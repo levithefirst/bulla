@@ -235,6 +235,8 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   const fee = FEE_TOTAL;
   const state = invoice ? invoice.state : null;
   const b = burners[active];
+  const doneCount = steps.filter((x) => x.status === "done" || x.status === "skipped").length;
+  const pctDone = Math.round((doneCount / Math.max(steps.length, 1)) * 100);
 
   return (
     <div className="judge">
@@ -269,6 +271,28 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
         </div>
       )}
 
+      {result && (
+        <section className="released-moment" aria-live="polite" aria-label="Escrow loop finished">
+          <span className="released-check" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          </span>
+          <div>
+            <p className="released-kicker">Escrow settled on {config.chain.name}</p>
+            <p className="released-title">Released</p>
+            <p className="released-sub num">
+              {f(DEMO_AMOUNT - fee)} landed in the Freelancer's container in {(result.ms / 1000).toFixed(1)} s, across {steps.filter((x) => x.hash).length} real transactions.
+            </p>
+          </div>
+          {invoice && (
+            <a className="btn btn-primary btn-lg" href={`#/invoice/${invoice.id}?escrow=demo`}>
+              See the public receipt
+            </a>
+          )}
+        </section>
+      )}
+
       <div className="judge-grid">
         <section className="card" aria-labelledby="steps-title">
           <div className="row-between">
@@ -277,6 +301,12 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
               {result ? `Done in ${(result.ms / 1000).toFixed(1)} s` : running ? `${(elapsed / 1000).toFixed(1)} s` : "Ready"}
             </span>
           </div>
+          <div className={`judge-progress${result ? " judge-progress-done" : ""}`} aria-hidden="true">
+            <span style={{ width: `${pctDone}%` }} />
+          </div>
+          <p className="judge-progress-label muted small num">
+            {doneCount} of {steps.length} steps confirmed
+          </p>
           <ol className="judge-steps">
             {steps.map((s) => (
               <li key={s.key} className={`jstep jstep-${s.status}`} data-testid={`step-${s.key}`} data-status={s.status}>
