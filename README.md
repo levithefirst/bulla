@@ -123,7 +123,7 @@ Copy `.env.example` to `.env` (gitignored). Never commit keys.
 | `VITE_ESCROW_ADDRESS`, `VITE_ESCROW_TOKEN`, `VITE_RPC_URL` | web build | override `contracts/deployments.json` |
 | `VITE_DEPLOY_BLOCK` | web build | override the block the receipt timeline scans logs from |
 | `VITE_DEMO_GAS_TANK_KEY` | judge build only | **testnet-only** throwaway gas-tank key; embedded in the judge build; mainnet builds refuse it |
-| `VITE_JUDGE_URL` | mainnet build | link "Try it now" to the hosted testnet judge build |
+| `VITE_JUDGE_URL` | mainnet build | link "Try it now" to the hosted testnet judge build (`https://usebulla.vercel.app`) |
 | `VITE_JUDGE_ESCROW_ADDRESS`, `VITE_JUDGE_TOKEN`, `VITE_JUDGE_DEPLOY_BLOCK` | judge build | override `deployments.json` `xlayerTestnet.judge` |
 | `VITE_TAPEOUT_OPENER`, `VITE_TAPEOUT_FACTORY`, `VITE_TAPEOUT_PROCESSOR` (+ `VITE_JUDGE_TAPEOUT_*`) | localhost / testnet build only | TapeOut stand-in addresses; a mainnet build refuses them |
 | `VITE_DEMO_RUN_CAP_WEI` | judge build | per-run cap on what the demo tank may send (default: 3,000,000 gas at the current price) |
