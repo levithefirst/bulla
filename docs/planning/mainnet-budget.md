@@ -208,3 +208,4 @@ Do not send a seed or a private key. If Fluid wants the 0.5% fees or the circuit
 | `opener.open(Tapee, 1)` | `0x87672d904015bbdcc6a9cc3a505bc27d489033cd34869078df2a6056fefd5f2a` | 167,256 | 0.080003345 |
 
 Ops wallet OKB: 0.105001870 before the circuit, **0.023030936** after. Circuit plus container total: **0.081970934 OKB** (about $7.15 at $87.18/OKB, OKX OKB-USDT ticker 18 Nov 2026).
+- 18 Nov 2026, about 14:22 to 14:24 Africa/Lagos: **mainnet demo invoice #1** (2 x 0.50 USDC, released into the container) and the first container withdrawal. Gas for 10 txs: 0.0000308761 OKB; container `EXEC_FEE`: 0.0013 OKB; 0.0001 OKB parked in the buyer wallet for gas (0.0000888 left there). USDC is net zero: 1.00 out to the buyer, 0.995 back via the container and 0.005 back as the fee. Ops wallet after: **0.021611221 OKB, 1.273179 USDC**. Tx table: `docs/research.md` section 10.

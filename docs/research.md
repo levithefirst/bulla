@@ -218,7 +218,7 @@ Appended 18 Nov 2026; supersedes the UNKNOWN in section 8. Source for every row:
 | Only CALL | `operation` must be `0`. `operation = 1` reverts `OnlyCall()` (`0x90afeb14`) |
 | Execution fee | The holder attaches `EXEC_FEE()` as `msg.value`. It read `1300000000000000` wei (0.0013 OKB) on X Layer; without it the call reverts `ProtocolFeeTooLow(uint256,uint256)` (`0xafd49700`). Read it live before quoting a number: it can change with the beacon implementation |
 | Container must be opened | `execute` is gated on `opener.isOpened`. An unopened container reverts `NotPaid()` (`0x34e4a710`) until `open()` is paid (0.08 OKB, `docs/planning/mainnet-budget.md`) |
-| ERC-20 transfer specifically | Not simulated (the checked container's token balances were not read). A CALL to the token's `transfer` is the standard ERC-6551 way and is the path documented here |
+| ERC-20 transfer specifically | **Confirmed on mainnet 18 Nov 2026** (section 10): `execute(USDC, 0, transfer(ops, 995000), 0)` with `EXEC_FEE()` attached moved 0.995 USDC out of container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e`, tx `0x027e5a9b748e7a877ffb728f7c6ce5b61f4a12225d5b048d1ad934ac5417123f` |
 | TapeSend hub | Live on X Layer: hub proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee` (same on every chain), X Layer implementation `0xdCC57797089eBD9f26e686379A4323f353a3F9C6` matching the official client's pin; unsealed and, per its README, not independently audited |
 | Logs on the public RPC | `eth_getLogs` on `https://rpc.xlayer.tech` was rejected even for 2,000-block windows |
 
@@ -229,3 +229,27 @@ What Bulla v2 does with this:
 - The create form shows the container's opened status; the receipt explains how to withdraw: call the container's `execute(tokenAddress, 0, transfer(to, amount), 0)` with `EXEC_FEE()` attached, from the circuit holder's wallet, or use the official TapeOut app at https://www.tapeout.net/containers (section 3 above).
 - Because the public RPC rejects `eth_getLogs`, the seller history panel reads the new on-chain `circuitStats(processor, circuitId)` view instead of scanning events; timeline transaction links stay best-effort.
 - TapeSend stays out of scope for v2; `web/src/lib/notify.ts` is the seam.
+
+## 10. Mainnet demo invoice and first container withdrawal (18 Nov 2026, about 14:22 to 14:24 Africa/Lagos, Grok Bot)
+
+Escrow `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (X Layer mainnet, 196). Seller: ops wallet `0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0` (holds circuit #1 on Tapee `0x34fd3c870DEd61b264e3E7062163EA4539F79998`). Buyer: a fresh wallet `0x8888a1022F062158E563d32b4CCA1501B95Fe5fB` (the contract forbids buyer == seller, `InvalidBuyer`). **Invoice #1**: 2 milestones of 0.50 USDC ("Design draft", "Final delivery"), pay into container on, no arbiter, due 14 days out. Every tx was simulated with `eth_call` before sending; gas price 0.02 gwei.
+
+| Step | From | Tx | Gas used | Cost (OKB) |
+| --- | --- | --- | --- | --- |
+| Send buyer 1.00 USDC | ops | `0x407c3c422484cba719def1fa7b824c122636ed2cd17ddfd804a7f7046d961d6c` | 62,159 | 0.0000012432 |
+| Send buyer 0.0001 OKB for gas | ops | `0xcf9d1a1a647f48f2257376fdad65662f058410df41fdec08a8d0e3ee6ba29fad` | 21,000 | 0.0000004200 (+0.0001 transferred) |
+| `createInvoice` (invoice #1, circuit #1 on Tapee, pay into container) | ops (seller) | `0x019ecc1d2811c543ba856ff3e455a6745c0702b6d97ed9aecdac461e6e4d7afb` | 505,272 | 0.0000101054 |
+| `approve` 1.00 USDC | buyer | `0xc24a60a2e722f27232867274cc6b0541bd02705ca71bcfef48446710390b1ed0` | 55,437 | 0.0000011087 |
+| `fundInvoice` | buyer | `0x816947ac2d40aca534ebd98e865d71fe5de551cb6a717dd24a74f78d4f64e6f7` | 137,986 | 0.0000027597 |
+| `submitMilestone` 0 "Design draft" | ops | `0x1373ef1d82c8868e729d34988a0f230bda027d3a30fb1b922377133a58b0ac39` | 126,282 | 0.0000025256 |
+| `releaseMilestone` 0 -> container (0.4975 USDC + 0.0025 fee) | buyer | `0x910a5e2f8c2731339518f99b594bcf96935eefe0e2d696038b08a36726c3b15c` | 210,491 | 0.0000042098 |
+| `submitMilestone` 1 "Final delivery" | ops | `0x7a7f7ef5b9f96c6a6f3b711e39fe0680701be444dad62e3e4de47680841c165c` | 148,557 | 0.0000029711 |
+| `releaseMilestone` 1 -> container (0.4975 USDC + 0.0025 fee) | buyer | `0x81a14d46c4dc0dd1a1d648fd46fe86b441cbbae91af5c3a55b9503421c2b993e` | 154,685 | 0.0000030937 |
+| Container `execute(USDC, 0, transfer(ops, 0.995), 0)` + `EXEC_FEE` | ops (circuit holder) | `0x027e5a9b748e7a877ffb728f7c6ce5b61f4a12225d5b048d1ad934ac5417123f` | 122,443 | 0.0000024489 + 0.0013 fee |
+
+Results, read on chain:
+
+- `payoutTarget(1)` returned the container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` before the releases (opted in and opened).
+- Invoice state Completed (3), `releasedAmount` 1.00 USDC. The container received **0.995 USDC** (2 x 0.4975); the fee recipient (ops wallet) received **0.005 USDC** (0.5%).
+- **Container withdrawal works (last container UNKNOWN resolved):** `EXEC_FEE()` read 0.0013 OKB, `owner()` = the circuit holder. `execute(USDC, 0, transfer(ops, 995000), 0)` with `msg.value = EXEC_FEE()` succeeded; the container went to 0 USDC and the ops wallet got the 0.995 USDC back (ops USDC 1.273179 before the demo, 1.273179 after).
+- Explorer shot for the video (release into the container): https://web3.okx.com/explorer/x-layer/tx/0x910a5e2f8c2731339518f99b594bcf96935eefe0e2d696038b08a36726c3b15c

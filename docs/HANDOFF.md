@@ -113,6 +113,8 @@ Checklist in `docs/deweb.md`. Done: mirror shows the same receipt. Placeholder: 
 
 One milestone invoice created with the real circuit and "Pay into my TapeOut container" on, with at least one milestone **Released** into the opened container (receipt and explorer shot for the form and the video; note the release tx hash) and one Funded invoice with a short due date for the refund shot. Done: both receipts open on the gateway. Placeholder: `<<DEMO_INVOICE_ID>>`.
 
+**Done 18 Nov 2026 (Grok Bot):** invoice **#1** on escrow `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07`, 2 x 0.50 USDC, both milestones released into the opened container (0.995 USDC, fee 0.005 USDC). Release tx for the explorer shot: `0x910a5e2f8c2731339518f99b594bcf96935eefe0e2d696038b08a36726c3b15c` (milestone 0), `0x81a14d46c4dc0dd1a1d648fd46fe86b441cbbae91af5c3a55b9503421c2b993e` (milestone 1). Buyer wallet `0x8888a1022F062158E563d32b4CCA1501B95Fe5fB` (box key, never committed). The receipt page is `#/invoice/1` on the **mainnet** build, which is not hosted yet (usebulla.vercel.app is the testnet judge build). Full tx table: `docs/research.md` section 10.
+
 ### 9. Demo video (human)
 
 Script and exact clicks in `docs/DEMO.md`. Done: ≤ 3:00 video uploaded, link in the draft. Placeholder: `<<VIDEO_URL>>`.
@@ -140,7 +142,7 @@ The build sandbox cannot reach X Layer RPCs, so these were verified only against
 - Foundry port of the tests if Foundry becomes installable (optional; Hardhat is the chosen toolchain).
 - Find an official OKX developer page for the `window.okxwallet` provider name (research §7 marks it UNKNOWN-official; the generic browser-wallet connector covers OKX Wallet anyway).
 - Judge mode on testnet uses TapeOut stand-ins because TapeOut has no published testnet deployment; if one appears, redeploy the judge escrow with the real testnet opener and factory.
-- First real container withdrawal: call `execute(USDC, 0, transfer(to, amount), 0)` from the holder with `EXEC_FEE()` attached (or use tapeout.net) and record the tx in `docs/research.md`; this removes the last container UNKNOWN.
+- First real container withdrawal: **done 18 Nov 2026.** `execute(USDC, 0, transfer(ops, 995000), 0)` with `EXEC_FEE()` (0.0013 OKB) from the circuit holder moved 0.995 USDC out of container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e`: tx `0x027e5a9b748e7a877ffb728f7c6ce5b61f4a12225d5b048d1ad934ac5417123f`. Recorded in `docs/research.md` section 10.
 
 ## Secrets check
 
