@@ -17,6 +17,16 @@ Written 14 Nov 2026 at the end of the autonomous build, updated the same day aft
 
 `feeBps` is 50 and `initialOwner` is the deployer on every chain.
 
+## Links
+
+List both everywhere, demo first:
+
+- **One-tap demo (testnet), no wallet, about 10 s:** https://try-usebulla.vercel.app
+- **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
+- **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
+
+If the submission form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link.
+
 - **Container payout facts** (verified on chain by Grok Bot, `docs/research.md` §9, source `docs/planning/win-audit/onchain-checks.md`): the container must be **opened** (`opener.isOpened`; open it in the official app, `open()` costs 0.08 OKB) or it reverts `NotPaid()`. An opened container withdraws with ERC-6551 `execute(to, value, data, 0)` (selector `0x51945447`; operation 1 reverts `OnlyCall()`), called by the circuit holder with `EXEC_FEE()` attached as `msg.value` (0.0013 OKB read on 18 Nov 2026; always read it live) or it reverts `ProtocolFeeTooLow`. v2 therefore keeps "Pay into my TapeOut container" opt-in and pays the holder whenever the container is not opened. The receipt shows a "How to withdraw from your container" note (execute with `EXEC_FEE`, or the official https://www.tapeout.net/containers UI). A USDC withdrawal through `execute` was not simulated end to end: **UNKNOWN** until the first real withdrawal.
 - **The public X Layer RPC rejects `eth_getLogs`.** The "On-chain activity" panel reads the on-chain `circuitStats` view instead; timeline tx links stay best effort.
 - **TapeSend** hub is live on X Layer (proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee`, implementation `0xdCC57797089eBD9f26e686379A4323f353a3F9C6`, per `onchain-checks.md`) but out of scope for v2; the seam is `web/src/lib/notify.ts`.
@@ -107,19 +117,19 @@ Follow `docs/tapeout-binding.md`. **Open the container** in the official app (ht
 
 The gateway refused to show the site until the name was paid, so `scripts/deweb-bind.mjs` called `DomainBinding.bind("1.2.397.tape", container, 120)` (impl `0x5ebf29b8…` pinned in TapeKit `kernel/src/config.js`; `monthlyFee` re-read as 0, so value 0): tx `0x412e41140339d1d180ffa994320ced33899235e50ad1c18ac0a391693ef14b9e`, `isLive` true, container paid until 26 Sep 2036.
 
-Cost: 0.002770333 OKB for the upload (27 txs, about 115M gas at 0.024 gwei) plus 0.000004452 OKB for the bind. Live: https://1-2-397.tapekit.org/ and https://1-2-397.tapekit.org/#/invoice/1 (headless check: invoice #1 Released, both milestones Released, 0.995 USDC to the container).
+Cost: 0.002770333 OKB for the upload (27 txs, about 115M gas at 0.024 gwei) plus 0.000004452 OKB for the bind. Live as a secondary mirror: https://1-2-397.tapekit.org/ and https://1-2-397.tapekit.org/#/invoice/1 (headless check: invoice #1 Released, both milestones Released, 0.995 USDC to the container).
 
 `web/src/deweb.json` is filled and the HTTPS mirror rebuilt with it. The DeWEB copy is the build from before that edit, so its footer still says "not published yet"; republishing only the changed JS (`node scripts/deweb-publish.mjs send` after `npm run deweb:package`) would fix that for roughly 0.0013 OKB. Not done, to keep to a single pass.
 
 ### 7. HTTPS mirror
 
-**Done.** https://usebulla.vercel.app (Vercel static upload of the mainnet build, no repo link, no gas tank key, `.vercelignore` blocks `.env*`). Receipt: https://usebulla.vercel.app/#/invoice/1.
+**Done.** App (mainnet, real USDC): https://usebulla.vercel.app (Vercel static upload of the mainnet build, no repo link, no gas tank key, `.vercelignore` blocks `.env*`). Receipt: https://usebulla.vercel.app/#/invoice/1.
 
 ### 8. Demo invoices on mainnet (human, signed, real funds)
 
 One milestone invoice created with the real circuit and "Pay into my TapeOut container" on, with at least one milestone **Released** into the opened container (receipt and explorer shot for the form and the video; note the release tx hash) and one Funded invoice with a short due date for the refund shot. Done: both receipts open on the gateway. Placeholder: `<<DEMO_INVOICE_ID>>`.
 
-**Done 18 Nov 2026 (Grok Bot):** invoice **#1** on escrow `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07`, 2 x 0.50 USDC, both milestones released into the opened container (0.995 USDC, fee 0.005 USDC). Release tx for the explorer shot: `0x910a5e2f8c2731339518f99b594bcf96935eefe0e2d696038b08a36726c3b15c` (milestone 0), `0x81a14d46c4dc0dd1a1d648fd46fe86b441cbbae91af5c3a55b9503421c2b993e` (milestone 1). Buyer wallet `0x8888a1022F062158E563d32b4CCA1501B95Fe5fB` (box key, never committed). The receipt page is `#/invoice/1` on the **mainnet** build: https://usebulla.vercel.app/#/invoice/1 (DeWEB: https://1-2-397.tapekit.org/#/invoice/1). Full tx table: `docs/research.md` section 10.
+**Done 18 Nov 2026 (Grok Bot):** invoice **#1** on escrow `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07`, 2 x 0.50 USDC, both milestones released into the opened container (0.995 USDC, fee 0.005 USDC). Release tx for the explorer shot: `0x910a5e2f8c2731339518f99b594bcf96935eefe0e2d696038b08a36726c3b15c` (milestone 0), `0x81a14d46c4dc0dd1a1d648fd46fe86b441cbbae91af5c3a55b9503421c2b993e` (milestone 1). Buyer wallet `0x8888a1022F062158E563d32b4CCA1501B95Fe5fB` (box key, never committed). The receipt page is `#/invoice/1` on the **mainnet** app: https://usebulla.vercel.app/#/invoice/1 (DeWEB secondary mirror: https://1-2-397.tapekit.org/#/invoice/1). Full tx table: `docs/research.md` section 10.
 
 ### 9. Demo video (human)
 

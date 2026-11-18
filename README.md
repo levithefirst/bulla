@@ -10,18 +10,25 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 
 *A bulla was a sealed Mesopotamian clay envelope holding tokens for goods owed, broken open only when the deal completed.*
 
+## Links
+
+- **One-tap demo (testnet), no wallet, about 10 s:** https://try-usebulla.vercel.app
+- **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
+- **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
+
 ## Status
 
 | Piece | State |
 | --- | --- |
 | `BullaEscrow` v2 (circuit-bound, 1 to 10 milestones, optional arbiter, container payout) | done; 57 Hardhat tests incl. seeded fuzz + invariant walks; Slither 0 high / 0 medium |
-| Judge mode ("Try it now": one tap, two milestones paid into a stand-in container on X Layer testnet) | done; local acceptance 12 txs in 0.7 s in-app (664 ms), 1.0 s tap to Released (982 ms) (limit 10 s); testnet deploy + gas tank pending (Grok Bot) |
+| Judge mode ("Try it now": one tap, two milestones paid into a stand-in container on X Layer testnet) | done; hosted at https://try-usebulla.vercel.app ; local acceptance 12 txs in 0.7 s in-app (664 ms), 1.0 s tap to Released (982 ms) (limit 10 s) |
 | Web app (landing, create with circuit check and milestones, receipt with on-chain activity panel and share kit) | done; static relative-path build, light and dark, 375px to desktop |
 | E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, 375px + keyboard, judge mode) | 10 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
 | X Layer testnet / mainnet deploy | v2 deployed: mainnet `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (Sourcify exact match), testnet `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, judge `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4`; a superseded v1 escrow on mainnet is ignored |
 | TapeOut circuit + container | circuit #1 on processor #397 (Tapee), container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` opened; mainnet demo invoice #1 paid 0.995 USDC into it |
-| DeWEB publish | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) |
-| Mainnet web app | https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1 (DeWEB: https://1-2-397.tapekit.org/#/invoice/1) |
+| One-tap demo (testnet), no wallet, about 10 s | https://try-usebulla.vercel.app |
+| App (mainnet, real USDC) | https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1 |
+| DeWEB publish (secondary mirror) | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) ; same receipt: https://1-2-397.tapekit.org/#/invoice/1 |
 
 Everything still open is listed in [`docs/HANDOFF.md`](docs/HANDOFF.md). `npm run release:check` fails until it is done.
 
@@ -155,7 +162,7 @@ X Layer is the core loop: every lock, delivery and release is an X Layer transac
 | 1 | **X Layer settlement** (mainnet 196, testnet 1952) | `BullaEscrow` holds funds and state on X Layer; receipts read straight from an X Layer RPC; the judge loop runs on testnet 1952 | `contracts/`, `web/src/config.ts`, `web/src/judge/` | Code and deploy scripts done; v2 deploys pending |
 | 2 | **TapeOut circuit binding** (SPEC B.1 to B.4) | `createInvoice` requires `factory.isCPU(processor)` and `processor.ownerOf(circuitId) == seller`; each release re-reads the holder; receipts show the `<#ID>.2.<cpu>.tape` name and the circuit's on-chain activity (funded invoices only) | `contracts/contracts/BullaEscrow.sol`, `web/src/lib/circuit.ts`, `shared/tapeoutCore.ts` | Wired; official X Layer opener and factory hard-coded for 196; circuit mint pending (human) |
 | 3 | **TapeOut container payout** (`opener.accountOf`) | Per-invoice opt-in: releases land in the circuit's ERC-6551 container | same | Wired; opt-in, pays the container only once opened (else the holder); withdraw with `execute` + `EXEC_FEE()` or tapeout.net |
-| 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts`, `scripts/deweb-publish.mjs`, `scripts/deweb-bind.mjs` | Published, https://1-2-397.tapekit.org/ |
+| 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts`, `scripts/deweb-publish.mjs`, `scripts/deweb-bind.mjs` | Published, https://1-2-397.tapekit.org/ (secondary mirror) |
 | 5 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to X Layer; "Get OKX Wallet" link | `web/src/lib/wallet.tsx` | Done (official provider-name doc not found; research §7) |
 | 6 | **OKX explorer deep links** on every tx and address | Toasts, receipt timeline, payout target, container, judge steps | `web/src/config.ts` | Done; testnet `/tx/` path to confirm on first click |
 | 7 | **Native USDC on X Layer** | The only token the mainnet escrow accepts; judge mode uses valueless DemoUSD | `contracts/deployments.json` | Token confirmed; escrow deploy pending |

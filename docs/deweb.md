@@ -55,12 +55,12 @@ Then re-run `npm run deweb:package` and re-upload the changed files (`index.html
 
 ## Plain HTTPS fallback (same contract)
 
-The DeWEB copy is the TapeOut-hosted one: its bytes live in the circuit container on X Layer and are verified by TapeKit. A plain HTTPS host is only a convenience mirror for judges or users whose browser has trouble with the gateway. It reads the same escrow contract, so receipts are identical.
+The DeWEB copy is the TapeOut-hosted one: its bytes live in the circuit container on X Layer and are verified by TapeKit. For the submission, README and promo, list the HTTPS app as "App (mainnet, real USDC)" and list DeWEB as a secondary mirror, after the one-tap demo. The HTTPS host reads the same escrow contract, so receipts are identical.
 
 Checklist:
 
 - [ ] `npm run deweb:package` (same build as DeWEB)
 - [ ] Upload `deweb-out/site/` to any static host (GitHub Pages on a private repo requires a paid plan; Cloudflare Pages, Netlify, or an S3 bucket all work). No rewrites needed (hash routing).
 - [ ] Open `<mirror>/#/invoice/<id>` with no wallet and confirm it shows the same data as the DeWEB copy
-- [ ] Label the mirror on the submission as "HTTPS mirror; canonical copy is on DeWEB"
+- [ ] On the submission, README and promo, list both links, demo first: one-tap demo (testnet), no wallet, about 10 s (https://try-usebulla.vercel.app), then App (mainnet, real USDC) (https://usebulla.vercel.app). If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link. Keep https://1-2-397.tapekit.org/ as a secondary mirror.
 - [ ] Keep the repo private; publishing the built site does not require making the repo public

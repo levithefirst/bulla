@@ -2,6 +2,14 @@
 
 Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked from https://web3.okx.com/xlayer/build-x-series. Deadline 7 Dec 2026, 23:59 UTC (internal target 6 Dec, `docs/SUBMISSION-CHECKLIST.md`). A human (Fluid) submits; nothing here has been submitted.
 
+**Links (list both everywhere, demo first):**
+
+- **One-tap demo (testnet), no wallet, about 10 s:** https://try-usebulla.vercel.app
+- **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
+- **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
+
+If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link (https://try-usebulla.vercel.app).
+
 Placeholders are UPPER_CASE names in double angle brackets. Replace every one before submitting; `npm run release:check` lists any that remain. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
 
 **One-liner:** Freelancers send a milestone invoice, the client locks USDC on X Layer, and each release pays the freelancer's TapeOut circuit (its holder, or straight into the circuit's container if the freelancer opts in), with a public receipt anyone can open without a wallet.
@@ -10,7 +18,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 
 ## 1. Try it in one tap
 
-- Judge URL (X Layer testnet, no wallet needed): `https://try-usebulla.vercel.app`
+- One-tap demo (testnet), no wallet, about 10 s: `https://try-usebulla.vercel.app`
 - What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to the OKX explorer.
 - Measured: `<<TESTNET_JUDGE_SECONDS>>` seconds on X Layer testnet (from `npm run e2e:testnet`). On a local node the same 12-transaction loop takes 0.7 s in-app (664 ms) and 1.0 s from the tap (982 ms) (`e2e/judge-mode.spec.ts`, 18 Nov 2026). Use only the measured testnet number in the form.
 
@@ -19,9 +27,10 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 | Field | Value |
 | --- | --- |
 | BullaEscrow v2 (X Layer, chain 196) | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
-| A real receipt | https://1-2-397.tapekit.org/#/invoice/1 (demo invoice #1: 2 x 0.50 USDC milestones, both released, 0.995 USDC paid into the circuit container, 0.005 USDC fee; same receipt on the HTTPS app: https://usebulla.vercel.app/#/invoice/1) |
-| DeWEB access link (canonical) | https://1-2-397.tapekit.org/ (TapeKit gateway for `1.2.397.tape`) |
-| Mainnet web app (HTTPS) | https://usebulla.vercel.app (same contract; canonical copy is on DeWEB) |
+| One-tap demo (testnet), no wallet, about 10 s | https://try-usebulla.vercel.app |
+| App (mainnet, real USDC) | https://usebulla.vercel.app |
+| A real receipt | https://usebulla.vercel.app/#/invoice/1 (demo invoice #1: 2 x 0.50 USDC milestones, both released, 0.995 USDC paid into the circuit container, 0.005 USDC fee; DeWEB secondary mirror: https://1-2-397.tapekit.org/#/invoice/1) |
+| DeWEB (secondary mirror) | https://1-2-397.tapekit.org/ (TapeKit gateway for `1.2.397.tape`) |
 | Escrow token | USDC `0xB6CEceAB302E2E4948951eE7843FC24E92933061` (Circle's X Layer address; symbol and 6 decimals probed, `docs/research.md` §2) |
 | TapeOut opener / factory the escrow is bound to | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` / `0x1f09DAeFA827f02CBb40967cc91b259763760761` (official X Layer, `docs/research.md` §8) |
 | Processor contract address | `0x34fd3c870DEd61b264e3E7062163EA4539F79998` (processor #397, Tapee) |
@@ -43,7 +52,7 @@ A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`). Do
 | TapeOut factory `isCPU` (B.1) | Only real TapeOut processors can be used to bill | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
 | TapeOut opener `accountOf` (B.2) | The circuit's ERC-6551 container is stored per invoice; the seller can opt in to receive releases there | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
 | Container `token()` (B.4) + factory list | Receipts show the seller's `<#ID>.2.<cpu>.tape` name, checked both ways | read-only |
-| DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | https://1-2-397.tapekit.org/ |
+| DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | https://1-2-397.tapekit.org/ (secondary mirror) |
 | X Layer settlement (196; testnet 1952 for judge mode) | Escrow, milestones, fees and refunds are X Layer transactions | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
 | Native USDC on X Layer | The only token the mainnet escrow accepts | `0xB6CEceAB302E2E4948951eE7843FC24E92933061` |
 | OKX Wallet + OKX explorer | OKX Wallet is the recommended connector; every tx and address links to the OKX explorer | n/a |
