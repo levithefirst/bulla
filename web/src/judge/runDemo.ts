@@ -88,6 +88,20 @@ export function tankAddress(): Address | null {
 }
 
 const balance = async (a: Address) => BigInt((await client.request({ method: "eth_getBalance", params: [a, "latest"] })) as Hex);
+/**
+ * The public X Layer testnet RPC is load-balanced: a read right after a confirmed receipt can land on a node
+ * one block behind and revert (e.g. InvoiceNotFound). Retry reads briefly instead of failing the demo.
+ */
+async function settled<T>(fn: () => Promise<T>, tries = 24, waitMs = 250): Promise<T> {
+  for (let n = 1; ; n++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (n >= tries) throw e;
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+  }
+}
 const nonceOf = async (a: Address) => Number(BigInt((await client.request({ method: "eth_getTransactionCount", params: [a, "pending"] })) as Hex));
 const gasPriceNow = async () => BigInt((await client.request({ method: "eth_gasPrice" })) as Hex);
 
@@ -242,36 +256,48 @@ export async function runDemo(burners: Burners, hooks: Hooks): Promise<{ invoice
   }
   if (invoiceId === null) throw new JudgeError("tx", "Invoice created but no InvoiceCreated event was found.");
   const id = invoiceId;
-  const inv0 = await ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] });
+  const inv0 = await settled(() => ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }));
   const container = inv0.container;
   const containerBefore = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
-  const readState = async () => {
-    const [inv, ms] = await Promise.all([
-      ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }),
-      ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id] }),
-    ]);
+  // minMs: the lowest milestone state this read must show (a lagging node returns the previous block).
+  const readState = async (minState = 1, minMs = 0) => {
+    const [inv, ms] = await settled(async () => {
+      const r = await Promise.all([
+        ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getInvoice", args: [id] }),
+        ethCall(client, { address: j.escrow, abi: bullaEscrowAbi, functionName: "getMilestones", args: [id] }),
+      ]);
+      if (Number(r[0].state) < minState || r[1].some((m) => Number(m.state) < minMs)) throw new Error("stale read");
+      return r;
+    });
     hooks.state(id, Number(inv.state), ms.map((m) => Number(m.state)));
   };
-  await readState();
+  await readState(1, 0);
 
   // 4. Lock, then deliver both milestones (pipelined), then release both (pipelined).
-  await send("fund", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("fundInvoice", [id, "0x0000000000000000000000000000000000000000"]) }));
-  await readState();
+  await send("fund", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("fundInvoice", [id, "0x0000000000000000000000000000000000000000"]), gas: 300_000n }));
+  await readState(2, 0);
   const fn = await nonceOf(burners.freelancer.address);
   const subs = [
     await submit("submit0", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), nonce: fn, gas: 200_000n })),
     await submit("submit1", "freelancer", () => fw.sendTransaction({ to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), nonce: fn + 1, gas: 200_000n })),
   ];
   await Promise.all(subs.map(confirm));
-  await readState();
+  await readState(2, 1);
   const cn2 = await nonceOf(burners.client.address);
   const rels = [
     await submit("release0", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 0n]), nonce: cn2, gas: 250_000n })),
     await submit("release1", "client", () => cw.sendTransaction({ to: j.escrow, data: escrowCall("releaseMilestone", [id, 1n]), nonce: cn2 + 1, gas: 250_000n })),
   ];
   await Promise.all(rels.map(confirm));
-  await readState();
-  const containerAfter = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
+  await readState(3, 2);
+  const containerAfter = await settled(
+    async () => {
+      const v = await ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] });
+      if (v <= containerBefore) throw new Error("stale read");
+      return v;
+    },
+    12,
+  ).catch(() => ethCall(client, { address: j.token, abi: erc20Abi, functionName: "balanceOf", args: [container] }));
   return { invoiceId: id, ms: Math.round(performance.now() - t0), container, containerReceived: containerAfter - containerBefore };
 }
 
