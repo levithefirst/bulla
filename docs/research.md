@@ -178,3 +178,32 @@ Appended for the judge-mode build; sections 1 to 6 above are unchanged.
 | TapeOut circuit container + DeWEB | Invoice `circuitContainerId`; seller's `<#ID>.2.<cpu>.tape` name on mainnet receipts; app packaged for SiteRegistry | §3 | Wired; container mint and DeWEB publish are human steps (HANDOFF 5, 6) |
 
 Judge-mode demo gas tank: a dedicated, throwaway, testnet-only key held by Grok Bot. Its private key is embedded in the judge build (it has to sign in the browser), so it must be treated as public: it holds only small faucet amounts, is never reused for anything else, and is rotated if drained. Mainnet builds refuse to compile with it set.
+
+## 8. TapeOut interfaces for circuit-bound invoices (verified 18 Nov 2026, Claude Code)
+
+Appended for BullaEscrow v2; earlier sections are unchanged. Sources read on 18 Nov 2026: https://github.com/TapeOutProtocol/TapeKit/blob/main/SPEC.md (Appendix B and §3.1) and https://github.com/TapeOutProtocol/TapeKit/blob/main/kernel/src/config.js (`L2_CONTRACTS`, `XLAYER_MAINNET`). Note: the SPEC numbers the processor as B.3, not B.1 (B.1 is the factory).
+
+| Interface | SPEC section | Signature and meaning (quoted from the SPEC tables) | Used by Bulla v2 |
+| --- | --- | --- | --- |
+| Processor (circuit NFT, ERC-721) | B.3 | `ownerOf(uint256 tokenId) returns (address)`: "The holder; reverts when the #ID does not exist" | `createInvoice` requires `ownerOf(circuitId) == msg.sender`; every release re-reads it |
+| Container opener | B.2 | `accountOf(address circuits, uint256 tokenId) returns (address)`: "The circuit's container address (deterministic ERC-6551 computation; works even before the container is deployed)"; `isOpened(address circuits, uint256 tokenId) returns (bool)` | Container address stored per invoice and used as the optional payout target; the UI shows `isOpened` |
+| Container (ERC-6551 account) | B.4 | `token() returns (uint256 chainId, address tokenContract, uint256 tokenId)`: "The circuit bound to the container ... must be recomputed with `accountOf` and compared" | Receipt name resolver (`shared/tapeoutCore.ts`) |
+| Processor factory | B.1 | `cpuCount()`, `cpuAt(uint256)`, `isCPU(address)` | Create form checks the processor is a TapeOut processor (`isCPU`) |
+
+X Layer mainnet (chain 196) addresses, from `kernel/src/config.js` `L2_CONTRACTS` (comment there: same source and deployer order on Base and X Layer, read-checked on 2026-09-19):
+
+| Contract | Address |
+| --- | --- |
+| Processor factory | `0x1f09DAeFA827f02CBb40967cc91b259763760761` |
+| Container opener | `0x536adD8F30f03b69f6fbF29d425A816A0dC50106` |
+
+The opener's write function `open(address,uint256)` (payable, `FEE()` = 0.08 OKB on X Layer) is recorded in `docs/planning/mainnet-budget.md`; Bulla never calls it.
+
+### Can a container move ERC-20 out (ERC-6551 `execute`)? UNKNOWN
+
+- The SPEC lists only `token()` for the container (B.4). It documents no `execute`, `executeCall`, or other call-forwarding function.
+- TapeKit contains no Solidity source for the container or its implementation (repository tree checked 18 Nov 2026).
+- SPEC §3.1 gives the BNB Chain container implementation `0xAf4E78a2257C9c5480c2F8310E3b00437260751d`. BscScan shows it is a verified `AccountBeaconProxy` whose ABI is only a constructor, `fallback` and `receive` (https://bscscan.com/address/0xAf4E78a2257C9c5480c2F8310E3b00437260751d#code). The account logic sits behind a beacon whose implementation was not read here.
+- The X Layer container implementation address is not published in TapeKit: UNKNOWN.
+
+Consequence for Bulla v2: paying into the container is **opt-in per invoice** (`payToContainer`, default `false` = pay the seller's wallet). The create form warns that a holder can only spend USDC sent to the container if the container supports outgoing calls, which is unconfirmed. To confirm before recommending it: read the beacon's implementation behind an opened X Layer container (ERC-1967 beacon slot) and check its verified source for an owner-gated `execute` (ERC-6551 `IERC6551Executable.execute(address,uint256,bytes,uint8)`, see https://eips.ethereum.org/EIPS/eip-6551). Owner: Grok Bot (WIN-AUDIT action 4).
