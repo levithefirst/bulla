@@ -62,5 +62,5 @@ Checklist:
 - [ ] `npm run deweb:package` (same build as DeWEB)
 - [ ] Upload `deweb-out/site/` to any static host (GitHub Pages on a private repo requires a paid plan; Cloudflare Pages, Netlify, or an S3 bucket all work). No rewrites needed (hash routing).
 - [ ] Open `<mirror>/#/invoice/<id>` with no wallet and confirm it shows the same data as the DeWEB copy
-- [ ] On the submission, README and promo, list both links, demo first: one-tap demo (testnet), no wallet, about 10 s (https://try-usebulla.vercel.app), then App (mainnet, real USDC) (https://usebulla.vercel.app). If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link. Keep https://1-2-397.tapekit.org/ as a secondary mirror.
+- [ ] On the submission, README and promo, list both links, demo first: one-tap demo (testnet), no wallet, under 15 s (https://try-usebulla.vercel.app), then App (mainnet, real USDC) (https://usebulla.vercel.app). If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link. Keep https://1-2-397.tapekit.org/ as a secondary mirror.
 - [ ] Keep the repo private; publishing the built site does not require making the repo public

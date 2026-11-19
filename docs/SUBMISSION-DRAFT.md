@@ -4,7 +4,7 @@ Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked fr
 
 **Links (list both everywhere, demo first):**
 
-- **One-tap demo (testnet), no wallet, about 10 s:** https://try-usebulla.vercel.app
+- **One-tap demo (testnet), no wallet, under 15 s:** https://try-usebulla.vercel.app
 - **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
 - **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
 
@@ -18,8 +18,8 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 
 ## 1. Try it in one tap
 
-- One-tap demo (testnet), no wallet, about 10 s: `https://try-usebulla.vercel.app`
-- What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to the OKX explorer.
+- One-tap demo (testnet), no wallet, under 15 s: `https://try-usebulla.vercel.app`
+- What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to its receipt read straight from the X Layer RPC (public explorers' X Layer indexes were lagging during the build), with an OKLink link as a secondary. Demo gas is paid by a small testnet-only relayer, so no key ships to the browser.
 - Measured: `<<TESTNET_JUDGE_SECONDS>>` seconds on X Layer testnet (from `npm run e2e:testnet`). On a local node the same 12-transaction loop takes 0.7 s in-app (664 ms) and 1.0 s from the tap (982 ms) (`e2e/judge-mode.spec.ts`, 18 Nov 2026). Use only the measured testnet number in the form.
 
 ## 2. Live on mainnet
@@ -27,7 +27,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 | Field | Value |
 | --- | --- |
 | BullaEscrow v2 (X Layer, chain 196) | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
-| One-tap demo (testnet), no wallet, about 10 s | https://try-usebulla.vercel.app |
+| One-tap demo (testnet), no wallet, under 15 s | https://try-usebulla.vercel.app |
 | App (mainnet, real USDC) | https://usebulla.vercel.app |
 | A real receipt | https://usebulla.vercel.app/#/invoice/1 (demo invoice #1: 2 x 0.50 USDC milestones, both released, 0.995 USDC paid into the circuit container, 0.005 USDC fee; DeWEB secondary mirror: https://1-2-397.tapekit.org/#/invoice/1) |
 | DeWEB (secondary mirror) | https://1-2-397.tapekit.org/ (TapeKit gateway for `1.2.397.tape`) |
@@ -55,7 +55,7 @@ A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`). Do
 | DeWEB SiteRegistry + TapeKit gateway | The static app is packaged for the circuit's container and opened through the TapeKit gateway | https://1-2-397.tapekit.org/ (secondary mirror) |
 | X Layer settlement (196; testnet 1952 for judge mode) | Escrow, milestones, fees and refunds are X Layer transactions | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
 | Native USDC on X Layer | The only token the mainnet escrow accepts | `0xB6CEceAB302E2E4948951eE7843FC24E92933061` |
-| OKX Wallet + OKX explorer | OKX Wallet is the recommended connector; every tx and address links to the OKX explorer | n/a |
+| OKX Wallet + explorers | OKX Wallet is the recommended connector; every tx opens an in-app receipt read from the X Layer RPC, plus an OKLink link; addresses link to the OKX explorer | n/a |
 
 Not all logic runs in a circuit: escrow and state live in a companion Solidity contract on X Layer; TapeOut provides the identity (circuit), the payout account (container) and the hosting (DeWEB). Not used: Fab X mining, TapeCode, TapeSend. The X Layer TapeSend hub is live (proxy `0xe61A9C7213a6Aa616C246a2B569e555B417b25ee`, `docs/research.md` §9) but out of scope for v2; a clean seam exists in `web/src/lib/notify.ts`.
 
@@ -94,7 +94,7 @@ Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in an
 - The seller submits a delivery hash and optional link per milestone; the buyer releases each milestone (the 0.5% fee applies per release). The arbiter, if any, can release or refund a submitted milestone and takes no fee.
 - After the due date the buyer can reclaim every unreleased milestone; a mutual cancel returns the unreleased remainder. Released milestones stay paid.
 - Payout: the circuit's current holder by default, or the circuit's container if the seller opted in and the container is opened (otherwise the holder). The receipt explains how to withdraw from the container (`execute` with `EXEC_FEE()`, or the official tapeout.net UI).
-- The receipt shows milestones, amounts and fees, payout target, circuit and container, arbiter, timeline with explorer links, the seller's history, a QR code and share links. No wallet, no backend, no account.
+- The receipt shows milestones, amounts and fees, payout target, circuit and container, arbiter, timeline with a tx link per step (in-app RPC receipt plus OKLink), the seller's history, a QR code and share links. No wallet, no backend, no account.
 
 ## Mapping to the five official judging criteria
 
@@ -105,7 +105,7 @@ Source: https://web3.okx.com/xlayer/build-x-series (five criteria, re-read 18 No
 | User Value and Commercial Potential | Cited late-payment pain; real multi-milestone escrow with an optional arbiter; 0.5% only on release; receipt share loop; `<<REAL_INVOICE_LINKS_OR_NONE_YET>>` |
 | Innovation | "Your TapeOut circuit is your business account": billing is gated by `ownerOf`, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity |
 | Ecosystem Integration | TapeOut processor, factory, opener and container reads on X Layer; DeWEB and the TapeKit gateway; native USDC; OKX Wallet and explorer |
-| Product Readiness and UX | One tap runs the full loop on X Layer testnet (`<<TESTNET_JUDGE_SECONDS>>` s); live mainnet escrow and receipts; 57 contract tests, 10 E2E tests, Slither notes |
+| Product Readiness and UX | One tap runs the full loop on X Layer testnet (`<<TESTNET_JUDGE_SECONDS>>` s); live mainnet escrow and receipts; 91 Hardhat tests, 17 E2E tests, Slither notes |
 | Demo Video (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut) | `<<VIDEO_URL>>`, script in `docs/DEMO.md`: a live release before 0:10, the container receiving USDC on the explorer, a real mainnet invoice, the business model on screen |
 
 ## Risks and honesty notes

@@ -8,7 +8,7 @@ import { fmtAmount, shortAddr } from "../lib/format";
 import { StatusBadge } from "../components/Status";
 import { CopyButton } from "../components/Copy";
 import { loadBurners, newBurners, type Burners, type Role } from "./burners";
-import { DEMO_AMOUNT, DEMO_MILESTONES, fmtOkb, isDemoRunning, JudgeError, runDemo, STEPS, tankKey, tankStatus, type Step, type StepKey } from "./runDemo";
+import { DEMO_AMOUNT, DEMO_MILESTONES, fmtOkb, isDemoRunning, JudgeError, hasGasSource, runDemo, STEPS, tankStatus, type Step, type StepKey } from "./runDemo";
 
 /** Same rules as lib/invoice displayState, from the raw states the runner reads. */
 function judgeDisplay(state: number, ms: number[]): StateName {
@@ -234,7 +234,7 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
   }, [autoRun, run]);
 
   const code = (error as JudgeError | null)?.code;
-  const tankMissing = !tankKey();
+  const tankMissing = !hasGasSource();
   const f = (v: bigint) => fmtAmount(v, 6, "DemoUSD");
   const fee = FEE_TOTAL;
   const state = invoice ? invoice.state : null;

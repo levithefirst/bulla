@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => {
     throw new Error(`VITE_DEMO_GAS_TANK_KEY is set for a ${network} build. Judge mode is testnet-only; unset it.`);
   }
 
+  // Hard guard: X Layer testnet builds pay judge gas through the server relayer (web/api/gas.ts); the key never ships to browsers.
+  if (network === "xlayerTestnet" && env.VITE_DEMO_GAS_TANK_KEY) {
+    throw new Error("VITE_DEMO_GAS_TANK_KEY is set for an xlayerTestnet build. The tank key belongs in the DEMO_GAS_TANK_KEY env var of the Vercel relayer, not in the bundle.");
+  }
+
   // Hard guard: X Layer mainnet (196) never uses a TapeOut stand-in or override.
   if (network === "xlayerMainnet") {
     const overrides = Object.keys(env).filter((k) => /^VITE_(JUDGE_)?TAPEOUT_/.test(k) && env[k]);

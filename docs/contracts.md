@@ -1,6 +1,6 @@
 # BullaEscrow v2 contract
 
-Source: `contracts/contracts/BullaEscrow.sol`. Tests: `contracts/test/*.test.ts` (`npm test`, 57 passing). Toolchain: Hardhat 2.29, solc 0.8.24 (from the `solc` npm package, no compiler download), OpenZeppelin 5 (`IERC20`, `SafeERC20`, `ReentrancyGuard`, `Ownable`, `Math`).
+Source: `contracts/contracts/BullaEscrow.sol`. Tests: `contracts/test/*.test.ts` (`npm test`, 91 passing, including the shared web helpers). Toolchain: Hardhat 2.29, solc 0.8.24 (from the `solc` npm package, no compiler download), OpenZeppelin 5 (`IERC20`, `SafeERC20`, `ReentrancyGuard`, `Ownable`, `Math`).
 
 **Unaudited.** Do not escrow amounts you cannot afford to lose. A superseded v1 escrow exists on X Layer mainnet (`docs/planning/mainnet-budget.md`); v2 replaces it and has a different ABI.
 

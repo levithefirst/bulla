@@ -12,7 +12,7 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 
 ## Links
 
-- **One-tap demo (testnet), no wallet, about 10 s:** https://try-usebulla.vercel.app
+- **One-tap demo (testnet), no wallet, under 15 s:** https://try-usebulla.vercel.app
 - **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
 - **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
 
@@ -20,13 +20,13 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 
 | Piece | State |
 | --- | --- |
-| `BullaEscrow` v2 (circuit-bound, 1 to 10 milestones, optional arbiter, container payout) | done; 57 Hardhat tests incl. seeded fuzz + invariant walks; Slither 0 high / 0 medium |
+| `BullaEscrow` v2 (circuit-bound, 1 to 10 milestones, optional arbiter, container payout) | done; 91 Hardhat tests incl. seeded fuzz + invariant walks; Slither 0 high / 0 medium |
 | Judge mode ("Try it now": one tap, two milestones paid into a stand-in container on X Layer testnet) | done; hosted at https://try-usebulla.vercel.app ; local acceptance 12 txs in 0.7 s in-app (664 ms), 1.0 s tap to Released (982 ms) (limit 10 s) |
 | Web app (landing, create with circuit check and milestones, receipt with on-chain activity panel and share kit) | done; static relative-path build, light and dark, 375px to desktop |
-| E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, 375px + keyboard, judge mode) | 10 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
+| E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, create-form validation and draft, released and funded receipts at 420px, 375px + keyboard, judge mode incl. double tap and second tab) | 17 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
 | X Layer testnet / mainnet deploy | v2 deployed: mainnet `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (Sourcify exact match), testnet `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, judge `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4`; a superseded v1 escrow on mainnet is ignored |
 | TapeOut circuit + container | circuit #1 on processor #397 (Tapee), container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` opened; mainnet demo invoice #1 paid 0.995 USDC into it |
-| One-tap demo (testnet), no wallet, about 10 s | https://try-usebulla.vercel.app |
+| One-tap demo (testnet), no wallet, under 15 s | https://try-usebulla.vercel.app |
 | App (mainnet, real USDC) | https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1 |
 | DeWEB publish (secondary mirror) | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) ; same receipt: https://1-2-397.tapekit.org/#/invoice/1 |
 
@@ -81,7 +81,7 @@ Requires Node 20+ (tested on Node 22). The Solidity compiler comes from the `sol
 ```bash
 npm install                 # all workspaces
 npm run compile             # contracts
-npm test                    # 57 contract tests (unit, fuzz/invariant, TapeOut resolver, deploy wiring, DemoUSD)
+npm test                    # 91 tests (contract unit, fuzz/invariant, TapeOut resolver, deploy wiring, DemoUSD, judge guards and relayer, form validation, chunked logs)
 npm run build               # web → web/dist (relative paths)
 ```
 
@@ -106,7 +106,7 @@ DeWEB package: `npm run deweb:package` → `deweb-out/` (see `docs/deweb.md`). P
 
 Probes (read-only): `npm run probe:network`, `npm run probe:tapeout`.
 
-Judge mode locally: `npm run e2e` includes `e2e/judge-mode.spec.ts`. Against X Layer testnet: `npm run deploy:judge` (needs a testnet key), then `E2E_TESTNET=1 VITE_DEMO_GAS_TANK_KEY=… npm run e2e:testnet` (skips cleanly without them). Build the hosted judge site with `VITE_BULLA_NETWORK=xlayerTestnet VITE_DEMO_GAS_TANK_KEY=… npm run build`; the tank key ends up in that build, so it must be a throwaway, faucet-funded, testnet-only key.
+Judge mode locally: `npm run e2e` includes `e2e/judge-mode.spec.ts`. Against X Layer testnet: `npm run deploy:judge` (needs a testnet key), then `E2E_TESTNET=1 VITE_DEMO_GAS_TANK_KEY=… npm run e2e:testnet` (skips cleanly without them). Build the hosted judge site with `VITE_BULLA_NETWORK=xlayerTestnet npm run build`, then `npx tsx scripts/build-relayer.ts <dist>` to add the gas relayer (`/api/gas`, a Vercel function). The testnet tank key lives only in the `DEMO_GAS_TANK_KEY` env var of the Vercel project; the relayer applies per-IP rate limits and a per-run cap, and the build refuses a testnet `VITE_DEMO_GAS_TANK_KEY`.
 
 Other checks: `npm run check:contrast` (theme pairings, both modes), `npm run screenshots` (regenerates `docs/screenshots/`), `npm run release:check` (fails while any placeholder, undeployed mainnet escrow, or unpublished DeWEB field remains). Larger fuzz campaign: `FUZZ_RUNS=20 FUZZ_STEPS=300 npx hardhat test test/BullaEscrow.invariants.test.ts` (from `contracts/`).
 
@@ -164,7 +164,7 @@ X Layer is the core loop: every lock, delivery and release is an X Layer transac
 | 3 | **TapeOut container payout** (`opener.accountOf`) | Per-invoice opt-in: releases land in the circuit's ERC-6551 container | same | Wired; opt-in, pays the container only once opened (else the holder); withdraw with `execute` + `EXEC_FEE()` or tapeout.net |
 | 4 | **DeWEB hosting** (SiteRegistry, TapeKit gateway) | The static app is packaged for the circuit's container | `scripts/deweb-package.ts`, `scripts/deweb-publish.mjs`, `scripts/deweb-bind.mjs` | Published, https://1-2-397.tapekit.org/ (secondary mirror) |
 | 5 | **OKX Wallet** as the first-class wallet | Listed first and marked "Recommended on X Layer"; adds or switches to X Layer; "Get OKX Wallet" link | `web/src/lib/wallet.tsx` | Done (official provider-name doc not found; research §7) |
-| 6 | **OKX explorer deep links** on every tx and address | Toasts, receipt timeline, payout target, container, judge steps | `web/src/config.ts` | Done; testnet `/tx/` path to confirm on first click |
+| 6 | **Tx links that always resolve**: in-app receipt page `#/tx/<hash>` read from the RPC, plus OKLink; OKX explorer for addresses | Toasts, receipt timeline, payout target, container, judge steps | `web/src/config.ts`, `web/src/pages/TxPage.tsx` | Done; OKX and OKLink X Layer indexes were behind the chain on 19 Nov 2026 |
 | 7 | **Native USDC on X Layer** | The only token the mainnet escrow accepts; judge mode uses valueless DemoUSD | `contracts/deployments.json` | Token confirmed; escrow deploy pending |
 
 How this maps to the five official judging criteria (https://web3.okx.com/xlayer/build-x-series):
@@ -172,7 +172,7 @@ How this maps to the five official judging criteria (https://web3.okx.com/xlayer
 - **User Value and Commercial Potential.** Cited late-payment pain (`docs/SUBMISSION-DRAFT.md`); real milestones funded up front, an optional arbiter, 0.5% only per successful release (rows 1, 7).
 - **Innovation.** "Your TapeOut circuit is your business account": only the circuit's holder can bill with it, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity (rows 2, 3).
 - **Ecosystem Integration.** TapeOut processor, factory, opener and container reads on X Layer, DeWEB and the TapeKit gateway, native USDC, OKX Wallet and explorer (rows 1 to 7).
-- **Product Readiness and UX.** One tap runs a two-milestone escrow on X Layer testnet with an explorer link per step (local acceptance: 1.0 s, limit 10 s); receipts need no wallet; real mode uses OKX Wallet (rows 1, 5, 6).
+- **Product Readiness and UX.** One tap runs a two-milestone escrow on X Layer testnet with a receipt link per step (live testnet: 11 to 13 s, under 15 s; local acceptance 1.0 s); receipts need no wallet; real mode uses OKX Wallet (rows 1, 5, 6).
 - **Demo Video** (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut). Script in `docs/DEMO.md`: a live release before 0:10, then the container receiving the payout on the explorer.
 
 ## How Bulla differs from TapeFlow and CoTape

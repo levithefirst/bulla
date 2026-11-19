@@ -15,6 +15,7 @@ import { config } from "../config";
 import { client } from "../lib/client";
 import { ethCall, waitForReceipt } from "../../../shared/rpc";
 import { heartbeatTabLock, NonceBook, releaseTabLock, sendRecovering, SingleFlight, TAB_LOCK_BEAT_MS, tryAcquireTabLock, type KV, type NonceCounter } from "../../../shared/judgeGuard";
+import { GAS_UNITS_PER_ROLE, perRunCost, planTopUps, RUN_CAP_GAS_UNITS } from "../../../shared/judgeRelay";
 import type { Burners, Role } from "./burners";
 
 export const DEMO_MILESTONES = [
@@ -22,10 +23,7 @@ export const DEMO_MILESTONES = [
   { label: "Final logo files", amount: parseUnits("150", 6) },
 ] as const;
 export const DEMO_AMOUNT = DEMO_MILESTONES.reduce((a, m) => a + m.amount, 0n);
-/** Gas budget per burner for one run (both milestones), used for the top-up and the per-run cap. */
-export const GAS_UNITS_PER_ROLE = 1_200_000n;
-/** Default per-run cap on what the tank may send, in gas units at the current price (override in wei with VITE_DEMO_RUN_CAP_WEI). */
-const RUN_CAP_GAS_UNITS = 3_000_000n;
+export { GAS_UNITS_PER_ROLE };
 
 const openerAbi = [
   {
@@ -78,9 +76,30 @@ export type Hooks = {
 
 const allowedChain = () => config.chain.id === 1952 || (config.chain.id === 31337 && config.networkKey === "localhost");
 
+/** In-browser tank key: only for the local CI node. Testnet builds never carry it; they use the server relayer. */
 export function tankKey(): Hex | null {
+  if (config.chain.id !== 31337) return null;
   const k = import.meta.env.VITE_DEMO_GAS_TANK_KEY;
   return k && /^0x[0-9a-fA-F]{64}$/.test(k) ? (k as Hex) : null;
+}
+
+/** Gas relayer endpoint (Vercel function web/api/gas.ts) for testnet builds. */
+export function relayerUrl(): string | null {
+  if (config.chain.id !== 1952) return null;
+  return import.meta.env.VITE_DEMO_RELAYER_URL || "/api/gas";
+}
+
+/** True when this build can pay judge-mode gas (local key on the CI node, or the relayer on testnet). */
+export const hasGasSource = () => !!tankKey() || !!relayerUrl();
+
+async function relay<T>(init?: RequestInit): Promise<T> {
+  const r = await fetch(relayerUrl()!, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+  const j = (await r.json().catch(() => ({}))) as { code?: string; error?: string } & T;
+  if (!r.ok) {
+    const code = j.code === "tankEmpty" || j.code === "cap" || j.code === "chain" || j.code === "tankMissing" ? j.code : j.code === "rate" ? "busy" : "tx";
+    throw new JudgeError(code, j.error ?? `Gas relayer error (HTTP ${r.status}).`);
+  }
+  return j;
 }
 
 export function tankAddress(): Address | null {
@@ -105,8 +124,6 @@ async function settled<T>(fn: () => Promise<T>, tries = 15, waitMs = 200): Promi
 }
 /** Receipt poll interval. X Layer has ~1 s blocks, so a short poll keeps the wait close to the block time. */
 const RECEIPT_POLL_MS = 200;
-/** Gas price sent with every judge transaction: the node's price plus 20%, so a price tick does not strand a pipelined tx. */
-const bumped = (gp: bigint) => (gp * 12n) / 10n;
 /** Explicit gas limits (ceilings, not spend): skipping eth_estimateGas saves a round trip per transaction. */
 const GAS = { circuit: 150_000n, open: 200_000n, create: 700_000n, mint: 150_000n, approve: 100_000n, fund: 300_000n, submit: 250_000n, release: 350_000n } as const;
 const nonceOf = async (a: Address) => Number(BigInt((await client.request({ method: "eth_getTransactionCount", params: [a, "pending"] })) as Hex));
@@ -120,10 +137,14 @@ export function runCapWei(gasPrice: bigint): bigint {
 
 /** Tank balance and an honest estimate of full runs left (fresh burners each time). */
 export async function tankStatus(): Promise<{ address: Address; balance: bigint; perRun: bigint; runsLeft: number } | null> {
+  if (relayerUrl()) {
+    const s = await relay<{ address: Address; balance: string; perRun: string; runsLeft: number }>();
+    return { address: s.address, balance: BigInt(s.balance), perRun: BigInt(s.perRun), runsLeft: s.runsLeft };
+  }
   const a = tankAddress();
   if (!a) return null;
   const [b, gp] = await Promise.all([balance(a), gasPriceNow()]);
-  const perRun = bumped(gp) * GAS_UNITS_PER_ROLE * 2n + bumped(gp) * 21_000n * 2n;
+  const perRun = perRunCost(gp);
   return { address: a, balance: b, perRun, runsLeft: perRun > 0n ? Number(b / perRun) : 0 };
 }
 
@@ -137,30 +158,33 @@ async function runDemoInner(burners: Burners, hooks: Hooks): Promise<{ invoiceId
   if (!j || !j.tapeout?.processor) throw new JudgeError("notDeployed", "The judge-mode escrow and TapeOut stand-ins are not deployed on this network yet.");
   const processor = j.tapeout.processor;
   const tk = tankKey();
-  if (!tk) throw new JudgeError("tankMissing", "This build has no demo gas tank configured.");
+  const useRelayer = !tk && !!relayerUrl();
+  if (!tk && !useRelayer) throw new JudgeError("tankMissing", "This build has no demo gas tank configured.");
 
   const chain = config.chain;
-  const tankA = privateKeyToAccount(tk);
+  // On testnet the tank key stays on the server: a placeholder local account is only used for nonce bookkeeping names.
+  const tankA = privateKeyToAccount(tk ?? ("0x" + "11".repeat(32)) as Hex);
   const fwA = privateKeyToAccount(burners.freelancer.privateKey);
   const cwA = privateKeyToAccount(burners.client.privateKey);
 
-  const gasPrice = bumped(await gasPriceNow());
-  const need = gasPrice * GAS_UNITS_PER_ROLE;
-  const [fb, cb, tb, tn, fn0, cn0] = await Promise.all([
+  const [nodeGp, fb, cb, tb, tn, fn0, cn0] = await Promise.all([
+    gasPriceNow(),
     balance(burners.freelancer.address),
     balance(burners.client.address),
-    balance(tankA.address),
-    nonceOf(tankA.address),
+    tk ? balance(tankA.address) : Promise.resolve(0n),
+    tk ? nonceOf(tankA.address) : Promise.resolve(0),
     nonceOf(burners.freelancer.address),
     nonceOf(burners.client.address),
   ]);
-  const topUps = [fb < need ? need - fb : 0n, cb < need ? need - cb : 0n];
-  const spend = topUps[0] + topUps[1] + gasPrice * 21_000n * 2n;
+  const plan = planTopUps(nodeGp, [fb, cb]);
+  let gasPrice = plan.gasPrice;
+  const topUps = plan.topUps;
+  const spend = plan.spend;
   const cap = runCapWei(gasPrice);
-  if (topUps[0] + topUps[1] > cap) {
+  if (tk && topUps[0] + topUps[1] > cap) {
     throw new JudgeError("cap", `This run would need ${fmtOkb(topUps[0] + topUps[1])} testnet OKB from the demo tank, above the per-run cap of ${fmtOkb(cap)}. Nothing was sent. Gas may be unusually expensive; try again later.`);
   }
-  if ((topUps[0] || topUps[1]) && tb < spend) {
+  if (tk && (topUps[0] || topUps[1]) && tb < spend) {
     throw new JudgeError("tankEmpty", `Demo gas tank empty: it holds ${fmtOkb(tb)} testnet OKB and this run needs ${fmtOkb(spend)}. Nothing was sent. Try again later, or use your own wallet.`);
   }
 
@@ -222,8 +246,33 @@ async function runDemoInner(burners: Burners, hooks: Hooks): Promise<{ invoiceId
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     encodeFunctionData({ abi: bullaEscrowAbi, functionName: fn, args } as any);
 
-  // 2. Gas: both top-ups broadcast together up front (nonces assigned locally), receipts awaited together.
-  const gasTxs = await Promise.all([
+  // 2. Gas: both top-ups broadcast together up front, receipts awaited together. On testnet the server relayer signs and
+  //    sends them (it applies the per-IP rate limit and the per-run cap); locally the CI tank key does.
+  if (useRelayer) {
+    if (!topUps[0]) skip("gasFreelancer", "already has gas");
+    if (!topUps[1]) skip("gasClient", "already has gas");
+    if (topUps[0] || topUps[1]) {
+      hooks.active("tank");
+      if (topUps[0]) hooks.step("gasFreelancer", { status: "running" });
+      if (topUps[1]) hooks.step("gasClient", { status: "running" });
+      let r: { gasPrice: string; freelancer: Hex | null; client: Hex | null };
+      try {
+        r = await relay({ method: "POST", body: JSON.stringify({ freelancer: burners.freelancer.address, client: burners.client.address }) });
+      } catch (e) {
+        if (topUps[0]) hooks.step("gasFreelancer", { status: "error", note: shortErr(e) });
+        if (topUps[1]) hooks.step("gasClient", { status: "error", note: shortErr(e) });
+        throw e;
+      }
+      if (BigInt(r.gasPrice) > gasPrice) gasPrice = BigInt(r.gasPrice);
+      const sent: { key: StepKey; hash: Hex }[] = [];
+      if (r.freelancer) (hooks.step("gasFreelancer", { hash: r.freelancer }), sent.push({ key: "gasFreelancer", hash: r.freelancer }));
+      else if (topUps[0]) skip("gasFreelancer", "already has gas");
+      if (r.client) (hooks.step("gasClient", { hash: r.client }), sent.push({ key: "gasClient", hash: r.client }));
+      else if (topUps[1]) skip("gasClient", "already has gas");
+      await Promise.all(sent.map(confirm));
+    }
+  }
+  const gasTxs: ({ key: StepKey; hash: Hex } | null)[] = useRelayer ? [] : await Promise.all([
     topUps[0] ? submit("gasFreelancer", "tank", () => send(tankA, tankN, { to: burners.freelancer.address, value: topUps[0], gas: 21_000n })) : (skip("gasFreelancer", "already has gas"), null),
     topUps[1] ? submit("gasClient", "tank", () => send(tankA, tankN, { to: burners.client.address, value: topUps[1], gas: 21_000n })) : (skip("gasClient", "already has gas"), null),
   ]);

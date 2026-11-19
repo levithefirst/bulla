@@ -21,6 +21,7 @@ interface ImportMetaEnv {
   readonly VITE_DEMO_RUN_CAP_WEI?: string;
   /** TESTNET-ONLY demo gas tank key. Set only for the judge build. Never mainnet, never committed. */
   readonly VITE_DEMO_GAS_TANK_KEY?: string;
+  readonly VITE_DEMO_RELAYER_URL?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
