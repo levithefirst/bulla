@@ -12,7 +12,7 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 
 ## Links
 
-- **One-tap demo (testnet), no wallet, under 15 s:** https://try-usebulla.vercel.app
+- **One-tap demo (testnet), no wallet, about 15 s:** https://try-usebulla.vercel.app
 - **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
 - **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
 
@@ -26,7 +26,7 @@ Built for the X Layer TapeOut Accelerate hackathon (deadline 7 Dec 2026, 23:59 U
 | E2E (happy path, timeout refund, mutual cancel, revert toast, two milestones + container + arbiter, create-form validation and draft, released and funded receipts at 420px, 375px + keyboard, judge mode incl. double tap and second tab) | 17 passing on a local Hardhat node; `npm run e2e:testnet` opt-in |
 | X Layer testnet / mainnet deploy | v2 deployed: mainnet `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` (Sourcify exact match), testnet `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, judge `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4`; a superseded v1 escrow on mainnet is ignored |
 | TapeOut circuit + container | circuit #1 on processor #397 (Tapee), container `0x52D7504EFDF73EcdCE91411B77e154CEe353241e` opened; mainnet demo invoice #1 paid 0.995 USDC into it |
-| One-tap demo (testnet), no wallet, under 15 s | https://try-usebulla.vercel.app |
+| One-tap demo (testnet), no wallet, about 15 s | https://try-usebulla.vercel.app |
 | App (mainnet, real USDC) | https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1 |
 | DeWEB publish (secondary mirror) | **live** at https://1-2-397.tapekit.org/ (`1.2.397.tape`, 12 files, 504,497 bytes, 27 SiteRegistry txs + 1 DomainBinding bind, 18 Nov 2026) ; same receipt: https://1-2-397.tapekit.org/#/invoice/1 |
 
@@ -172,7 +172,7 @@ How this maps to the five official judging criteria (https://web3.okx.com/xlayer
 - **User Value and Commercial Potential.** Cited late-payment pain (`docs/SUBMISSION-DRAFT.md`); real milestones funded up front, an optional arbiter, 0.5% only per successful release (rows 1, 7).
 - **Innovation.** "Your TapeOut circuit is your business account": only the circuit's holder can bill with it, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity (rows 2, 3).
 - **Ecosystem Integration.** TapeOut processor, factory, opener and container reads on X Layer, DeWEB and the TapeKit gateway, native USDC, OKX Wallet and explorer (rows 1 to 7).
-- **Product Readiness and UX.** One tap runs a two-milestone escrow on X Layer testnet with a receipt link per step (live testnet: 11 to 13 s, under 15 s; local acceptance 1.0 s); receipts need no wallet; real mode uses OKX Wallet (rows 1, 5, 6).
+- **Product Readiness and UX.** One tap runs a two-milestone escrow on X Layer testnet with a receipt link per step (live testnet: 12 to 16 s; local acceptance 1.0 s); receipts need no wallet; real mode uses OKX Wallet (rows 1, 5, 6).
 - **Demo Video** (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut). Script in `docs/DEMO.md`: a live release before 0:10, then the container receiving the payout on the explorer.
 
 ## How Bulla differs from TapeFlow and CoTape

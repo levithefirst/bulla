@@ -21,7 +21,7 @@ Written 14 Nov 2026 at the end of the autonomous build, updated the same day aft
 
 List both everywhere, demo first:
 
-- **One-tap demo (testnet), no wallet, under 15 s:** https://try-usebulla.vercel.app
+- **One-tap demo (testnet), no wallet, about 15 s:** https://try-usebulla.vercel.app
 - **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
 - **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
 

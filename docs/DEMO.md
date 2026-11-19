@@ -8,7 +8,7 @@ The Demo Video is the fifth official judging criterion (https://web3.okx.com/xla
 
 - **Judge build live on X Layer testnet** (HANDOFF step 3b): `deploy:judge` done (TapeOut stand-ins + DemoUSD + judge escrow), gas tank funded by Grok Bot, judge site hosted. Run it once off camera and check the "Demo gas tank" line shows several runs left. Record a backup take.
 - **Mainnet:** escrow v2 deployed; Fluid's real TapeOut circuit with an **opened** container (official app, 0.08 OKB); one real invoice with a consenting counterparty, created with "Pay into my TapeOut container", with at least one milestone Released. Note the release tx hash and the container address.
-- **Tabs ready:** the one-tap demo (testnet), no wallet, under 15 s (https://try-usebulla.vercel.app, fresh browser profile, no wallet extension), the OKX explorer, the App (mainnet, real USDC) receipt (https://usebulla.vercel.app/#/invoice/1), and the OKX explorer page for the mainnet release tx showing USDC arriving at the container.
+- **Tabs ready:** the one-tap demo (testnet), no wallet, about 15 s (https://try-usebulla.vercel.app, fresh browser profile, no wallet extension), the OKX explorer, the App (mainnet, real USDC) receipt (https://usebulla.vercel.app/#/invoice/1), and the OKX explorer page for the mainnet release tx showing USDC arriving at the container.
 - Zoom 110%, 1280×800 or larger, notifications off, cursor already on the button at 0:00.
 - Fallback if testnet is down: a localhost judge build (README), labelled "local test chain" on screen.
 

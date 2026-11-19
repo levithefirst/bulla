@@ -4,7 +4,7 @@ Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked fr
 
 **Links (list both everywhere, demo first):**
 
-- **One-tap demo (testnet), no wallet, under 15 s:** https://try-usebulla.vercel.app
+- **One-tap demo (testnet), no wallet, about 15 s:** https://try-usebulla.vercel.app
 - **App (mainnet, real USDC):** https://usebulla.vercel.app ; receipt of mainnet demo invoice #1: https://usebulla.vercel.app/#/invoice/1
 - **DeWEB (secondary mirror):** https://1-2-397.tapekit.org/ ; same receipt: https://1-2-397.tapekit.org/#/invoice/1
 
@@ -18,7 +18,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 
 ## 1. Try it in one tap
 
-- One-tap demo (testnet), no wallet, under 15 s: `https://try-usebulla.vercel.app`
+- One-tap demo (testnet), no wallet, about 15 s: `https://try-usebulla.vercel.app`
 - What happens: two demo wallets are created in the browser; a stand-in circuit is minted (TapeOut has no testnet deployment, so it is labelled "testnet stand-in for TapeOut"); a two-milestone invoice is created, funded, delivered and released, and the DemoUSD lands in the circuit's container. Every step links to its receipt read straight from the X Layer RPC (public explorers' X Layer indexes were lagging during the build), with an OKLink link as a secondary. Demo gas is paid by a small testnet-only relayer, so no key ships to the browser.
 - Measured: `<<TESTNET_JUDGE_SECONDS>>` seconds on X Layer testnet (from `npm run e2e:testnet`). On a local node the same 12-transaction loop takes 0.7 s in-app (664 ms) and 1.0 s from the tap (982 ms) (`e2e/judge-mode.spec.ts`, 18 Nov 2026). Use only the measured testnet number in the form.
 
@@ -27,7 +27,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 | Field | Value |
 | --- | --- |
 | BullaEscrow v2 (X Layer, chain 196) | `0x35a7862e64b60857aDd42a8B8621DB8d9b4B5E07` |
-| One-tap demo (testnet), no wallet, under 15 s | https://try-usebulla.vercel.app |
+| One-tap demo (testnet), no wallet, about 15 s | https://try-usebulla.vercel.app |
 | App (mainnet, real USDC) | https://usebulla.vercel.app |
 | A real receipt | https://usebulla.vercel.app/#/invoice/1 (demo invoice #1: 2 x 0.50 USDC milestones, both released, 0.995 USDC paid into the circuit container, 0.005 USDC fee; DeWEB secondary mirror: https://1-2-397.tapekit.org/#/invoice/1) |
 | DeWEB (secondary mirror) | https://1-2-397.tapekit.org/ (TapeKit gateway for `1.2.397.tape`) |
