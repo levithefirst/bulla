@@ -64,3 +64,9 @@ Checklist:
 - [ ] Open `<mirror>/#/invoice/<id>` with no wallet and confirm it shows the same data as the DeWEB copy
 - [ ] On the submission, README and promo, list both links, demo first: one-tap demo (testnet), no wallet, under 15 s (https://try-usebulla.vercel.app), then App (mainnet, real USDC) (https://usebulla.vercel.app). If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link. Keep https://1-2-397.tapekit.org/ as a secondary mirror.
 - [ ] Keep the repo private; publishing the built site does not require making the repo public
+
+## Republish log
+
+- 18 Nov 2026: first publish, manifest `0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6`, 27 txs, 0.00277 OKB.
+- 19 Nov 2026 (QA fixes): manifest `0x50e37250642b0508f1cebc3eabde5c126ea5ed975e8157945e45d9e913c40a25`, 22 txs (changed files only; the fonts, favicon and logo were already on chain), 0.00235 OKB. `web/src/deweb.json` still records the first manifest, because that value is baked into the bundle.
+- Every tx hash is in `docs/deweb-publish-log.json`. `scripts/deweb-publish.mjs` takes an optional `DEWEB_CAP_WEI` spend cap (default 0.006 OKB).

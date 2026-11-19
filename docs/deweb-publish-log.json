@@ -1,0 +1,364 @@
+{
+  "_comment": "DeWEB SiteRegistry publishes for 1.2.397.tape (container 0x52D7504EFDF73EcdCE91411B77e154CEe353241e), signed by the mainnet ops wallet 0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0. Tx hashes and gas only.",
+  "publishes": [
+    {
+      "date": "2026-11-18",
+      "note": "first publish (27 SiteRegistry txs)",
+      "manifestSha256": "0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6",
+      "log": [
+        {
+          "step": "PUT assets/CreatePage-BeSwY49e.js",
+          "hash": "0x8c8899bed092e8019feaca6a340b621f239f9abea57856094b0247da13fe3f96",
+          "gasUsed": "4019750",
+          "costWei": "96474004019750",
+          "block": "76239426"
+        },
+        {
+          "step": "PUT assets/InvoicePage-BG34yUCl.js",
+          "hash": "0x50aee93f6b8d5daa4364d8247d738f348c1b67e01828b433a66d720932c95345",
+          "gasUsed": "5492004",
+          "costWei": "131808101492004",
+          "block": "76239432"
+        },
+        {
+          "step": "APPEND assets/InvoicePage-BG34yUCl.js #1",
+          "hash": "0x11878e2c4bef920aa57d71bb45cdb222d8afc6074e982b4c080fb297b9982b4e",
+          "gasUsed": "4440484",
+          "costWei": "106571620440484",
+          "block": "76239437"
+        },
+        {
+          "step": "PUT assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2",
+          "hash": "0x01267a9e5748d66bdc474d97718f38724c141e234bcbe1acdc6d690546c5f3e5",
+          "gasUsed": "3911871",
+          "costWei": "93884907911871",
+          "block": "76239442"
+        },
+        {
+          "step": "PUT assets/geist-latin-wght-normal-BgDaEnEv.woff2",
+          "hash": "0x1058ffbdac1cdf935fe4404f2b592b829f6d831ca0d7f093bce16ed1a55d28c4",
+          "gasUsed": "5535148",
+          "costWei": "132843557535148",
+          "block": "76239449"
+        },
+        {
+          "step": "APPEND assets/geist-latin-wght-normal-BgDaEnEv.woff2 #1",
+          "hash": "0x8381a5c1cdae056f445f81a67074a8c8e68c266fcdb92642ea8ad44c5582b4cf",
+          "gasUsed": "1334654",
+          "costWei": "32031697334654",
+          "block": "76239453"
+        },
+        {
+          "step": "PUT assets/geist-mono-latin-ext-wght-normal-Bwz-egvJ.woff2",
+          "hash": "0xe49e3fc4791f560ecd0a2bb8ac8877f6c172a0bcd7563c852d95fac6de467edb",
+          "gasUsed": "3518189",
+          "costWei": "84436539518189",
+          "block": "76239460"
+        },
+        {
+          "step": "PUT assets/geist-mono-latin-wght-normal-XN7g48iV.woff2",
+          "hash": "0xa940eb4e36b574d30a649e23290a82acb118094e0d21eef5beb8ac3c9c57828c",
+          "gasUsed": "5346522",
+          "costWei": "128316533346522",
+          "block": "76239465"
+        },
+        {
+          "step": "PUT assets/index-B3K4O35B.js",
+          "hash": "0x21f27c4e6912e0a8775b60d18f2904ba4b1ddefc38dbc129fc780ade4e0d0d83",
+          "gasUsed": "5491932",
+          "costWei": "131806373491932",
+          "block": "76239470"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #1",
+          "hash": "0x0ca67a04ab1e72312441386fbdedb42362c1678cd24eb91b13753ac0d59426d6",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239475"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #2",
+          "hash": "0xbfd2aa104585d6e160631ab8ab389b2fbe6996def496e2f3bd5906eb7dd52319",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239482"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #3",
+          "hash": "0x2ea57f14d6020ecf5bb6355431247c9f24dba97224dc8c9e495114554d401df4",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239486"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #4",
+          "hash": "0x535a596bc02d1338a576d65130793b6ecebdc29180c68811753a60229136de0a",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239489"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #5",
+          "hash": "0xb9c1af525b16c0dee4ffc15d18d9b9416c8c78902a2d29a6088929f28c6d7c95",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239493"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #6",
+          "hash": "0x4399ac20b8140a8ab26656ac867eee8a3dcab0b240fa2336507ebfc7abf47e7e",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239497"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #7",
+          "hash": "0xd16ff5eb93cd45709f0041eb13406fbacacd8595d9c0263c022fc487a6761a7f",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239501"
+        },
+        {
+          "step": "APPEND assets/index-B3K4O35B.js #8",
+          "hash": "0x598ea76c942e498336a4effdd2248bdb5b7cce067c1eb43476dfd7bb747a60e5",
+          "gasUsed": "4745755",
+          "costWei": "113898124745755",
+          "block": "76239504"
+        },
+        {
+          "step": "PUT assets/index-CmmcZCMl.css",
+          "hash": "0x179147606b347f81ebd79631fc8ca05f4edf3d7fbea7ce8775aef277aed80deb",
+          "gasUsed": "5491860",
+          "costWei": "131804645491860",
+          "block": "76239508"
+        },
+        {
+          "step": "APPEND assets/index-CmmcZCMl.css #1",
+          "hash": "0x65e205775ca481fe8cb1ce886e4849313a8ee99526378138a6ad8e2192f784ee",
+          "gasUsed": "1096601",
+          "costWei": "26318425096601",
+          "block": "76239511"
+        },
+        {
+          "step": "PUT assets/query-XRXPIBC4.js",
+          "hash": "0xcd3f68b5c53ad42fb8d37dc399808babbf71f748303e44914d6693002cc288a0",
+          "gasUsed": "5491932",
+          "costWei": "131806373491932",
+          "block": "76239515"
+        },
+        {
+          "step": "APPEND assets/query-XRXPIBC4.js #1",
+          "hash": "0x838b266b1d4d408358d16fd2450471dc3423383c11d9ef8360eaf2d7ae92c5ff",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239518"
+        },
+        {
+          "step": "APPEND assets/query-XRXPIBC4.js #2",
+          "hash": "0x066a1a5b819f752641b33535e86f3d9f236bd4e4a703c741a61fb08a28caed69",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76239522"
+        },
+        {
+          "step": "APPEND assets/query-XRXPIBC4.js #3",
+          "hash": "0x852706bca22dc6c008a743a53e58321b8bbb9525f545f757919f8433fc988710",
+          "gasUsed": "4872159",
+          "costWei": "116931820872159",
+          "block": "76239526"
+        },
+        {
+          "step": "PUT favicon.png",
+          "hash": "0x2075275ca8d7e0169b296da7f1566da18b570b2e1939d29449d51c1d84afde72",
+          "gasUsed": "1148329",
+          "costWei": "27559897148329",
+          "block": "76239534"
+        },
+        {
+          "step": "PUT index.html",
+          "hash": "0x1c5c6a0a1122e4a30677be6d56622c40d487890049f4917535bf561439de2e9f",
+          "gasUsed": "518588",
+          "costWei": "12446112518588",
+          "block": "76239540"
+        },
+        {
+          "step": "PUT logo.png",
+          "hash": "0xd6fd2c75141c0d5a8d22af718e07e5f6a1afe96165056326c62ff72050c470e9",
+          "gasUsed": "4560762",
+          "costWei": "109458292560762",
+          "block": "76239550"
+        },
+        {
+          "step": "setFallback index.html",
+          "hash": "0xaafa36468dba718b46163dc385b12a4a2489fbad24c19893b3cee4a7124b673c",
+          "gasUsed": "114238",
+          "costWei": "2741712114238",
+          "block": "76239556"
+        }
+      ],
+      "spentWei": "2770332811430529"
+    },
+    {
+      "date": "2026-11-19",
+      "note": "QA-fix republish: changed files only (fonts, favicon and logo already on chain were skipped)",
+      "manifestSha256": "0x50e37250642b0508f1cebc3eabde5c126ea5ed975e8157945e45d9e913c40a25",
+      "log": [
+        {
+          "step": "PUT assets/Copy-BEskCMNa.js",
+          "hash": "0x4426e0f0d9c6036faef9a691226fb5d510630c54413a65f257bcb4e5ff141829",
+          "gasUsed": "495587",
+          "costWei": "11894088495587",
+          "block": "76349870"
+        },
+        {
+          "step": "PUT assets/CreatePage-sLG5oWy1.js",
+          "hash": "0x63f1b62bff48c19931dcfe1a89bdc1fe541b8b00368730fb61e79a61ab937fa0",
+          "gasUsed": "5423571",
+          "costWei": "130165709423571",
+          "block": "76349877"
+        },
+        {
+          "step": "PUT assets/InvoicePage-Tsts4GJo.js",
+          "hash": "0x45a8f369b5eadac8164f9b3dfc67bf54c03060ad04d7629b0d8ce80239d6a9ce",
+          "gasUsed": "5492004",
+          "costWei": "131808101492004",
+          "block": "76349881"
+        },
+        {
+          "step": "APPEND assets/InvoicePage-Tsts4GJo.js #1",
+          "hash": "0x5e8637610e79a19a51777ef50aa3043d5399e2ac2b59356a522f00cf8f3d3c59",
+          "gasUsed": "5086316",
+          "costWei": "122071589086316",
+          "block": "76349885"
+        },
+        {
+          "step": "PUT assets/TxPage-DBdLK7an.js",
+          "hash": "0xcc5d40dc229543c578dbdbe89f4d45bf260caae236c4c58b4840c75d8bd119db",
+          "gasUsed": "1284290",
+          "costWei": "30822961284290",
+          "block": "76349888"
+        },
+        {
+          "step": "PUT assets/client-BQ-vemAq.js",
+          "hash": "0x5aa287df601d8a02e9b7b880862087578fbe0c65ea9264dde6668d527e6526e8",
+          "gasUsed": "5491944",
+          "costWei": "131806661491944",
+          "block": "76349892"
+        },
+        {
+          "step": "APPEND assets/client-BQ-vemAq.js #1",
+          "hash": "0x2e0e4b216e1701c819e636ab7894cae8102df3b6fa6660253f6ad5289e84ae74",
+          "gasUsed": "3009468",
+          "costWei": "72227235009468",
+          "block": "76349896"
+        },
+        {
+          "step": "PUT assets/index-D9MHL8Ul.css",
+          "hash": "0xc929aa5f58b69f0bd3395ee8c910474b124ef14e409a6a00176098a52d69dec1",
+          "gasUsed": "5491860",
+          "costWei": "131804645491860",
+          "block": "76349899"
+        },
+        {
+          "step": "APPEND assets/index-D9MHL8Ul.css #1",
+          "hash": "0x45a0aef59b7e02b31f944241709c2f4efffdb1867f2500eadfc59389d4252f4a",
+          "gasUsed": "4489850",
+          "costWei": "107756404489850",
+          "block": "76349903"
+        },
+        {
+          "step": "PUT assets/index-lObP4jT0.js",
+          "hash": "0x4756de9e4869de381ff11d0d1205773d27b5f41bb22489002b70e3e766f19066",
+          "gasUsed": "5491932",
+          "costWei": "131806373491932",
+          "block": "76349907"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #1",
+          "hash": "0xa1b3c3b52832c38b99e5c9a01c8d4fff61446988fccb5c0a7c28818e4e80e55c",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349911"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #2",
+          "hash": "0xada90735584f9f6701a97d075fe35cd7a8c76d103a980c1dc2e6c5cd9a809513",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349914"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #3",
+          "hash": "0x0f1bdda400fba9f31cb63d2ad815d6fe9aad67ad9f195bfa6d61044f6f0e2f32",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349918"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #4",
+          "hash": "0x67a4f79958e2a82a55d7e704a33ce99506e6a13f597dc267468c7992cffb8e21",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349922"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #5",
+          "hash": "0x85feecd7a434e5b0248891b288799fd00dbbad34c269a45259839e8c2c156fcc",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349929"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #6",
+          "hash": "0x8d19603e25f3051a4cc296ba8edc64ff15bf1cf15c811b5ed12117ebca52225f",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349933"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #7",
+          "hash": "0x481f76e0900fdeb1bb765b36bd8aad91404dd41608cf744b74be098dad096ad8",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349937"
+        },
+        {
+          "step": "APPEND assets/index-lObP4jT0.js #8",
+          "hash": "0xcc2ee6ab6a24783be8ac73e16f4845c213e607b72729d29597e0d8ec8aa31be7",
+          "gasUsed": "5335472",
+          "costWei": "128051333335472",
+          "block": "76349944"
+        },
+        {
+          "step": "PUT assets/query-BmzuwvIL.js",
+          "hash": "0xa9cc3796e2cf58b7b0b4b7cab969cc1baaa24b96507a215810fa68a389247cd9",
+          "gasUsed": "5491932",
+          "costWei": "131806373491932",
+          "block": "76349948"
+        },
+        {
+          "step": "APPEND assets/query-BmzuwvIL.js #1",
+          "hash": "0xc75816758497ba2bb5dae743b082d62e82bab2d63525290c98268b40759b4ec3",
+          "gasUsed": "5366639",
+          "costWei": "128799341366639",
+          "block": "76349952"
+        },
+        {
+          "step": "APPEND assets/query-BmzuwvIL.js #2",
+          "hash": "0xc40f75ce4cb8b7142a634614c6dc8839ef1e2828a7375d85be0c9e4009d52e3e",
+          "gasUsed": "2128987",
+          "costWei": "51095690128987",
+          "block": "76349959"
+        },
+        {
+          "step": "PUT index.html",
+          "hash": "0x8ac52368d42da61ac2068d718a9568fbf7f8a59fa49d218ed7d46d2bf33d252f",
+          "gasUsed": "377926",
+          "costWei": "9070224377926",
+          "block": "76349962"
+        }
+      ],
+      "spentWei": "2352582122024251"
+    }
+  ]
+}

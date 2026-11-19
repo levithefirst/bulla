@@ -10,7 +10,7 @@ const REG = "0xd6EFb7adCc9c83dC4924Ad56f6a8E4e969b9ADB6", IMPL = "0xa85c4143d1d4
 const DB = "0x68809Fd2fb343aA57D0aeB7f33Defe477c9666f9";
 const CONTAINER = "0x52D7504EFDF73EcdCE91411B77e154CEe353241e", OPS = "0x00f9b7a48F4B3eCdcc8288C2295E59132143B3b0";
 const SITE = new URL("../deweb-out/site", import.meta.url).pathname, man = JSON.parse(fs.readFileSync(new URL("../deweb-out/manifest.json", import.meta.url)));
-const CAP = 6_000_000_000_000_000n; // 0.006 OKB hard cap
+const CAP = process.env.DEWEB_CAP_WEI ? BigInt(process.env.DEWEB_CAP_WEI) : 6_000_000_000_000_000n; // hard cap (default 0.006 OKB)
 const SEND = process.argv[2] === "send";
 const r = (functionName, args = []) => pub.readContract({ address: REG, abi, functionName, args });
 // preflight
