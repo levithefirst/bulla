@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { config, explorerAddress, explorerTx } from "../config";
+import { appTx, config, explorerAddress, explorerTx } from "../config";
 import { formatEther, type Address } from "viem";
 import { fmtAmount, fmtDuration, fmtTime, shortAddr, ZERO32 } from "../lib/format";
 import { parseError } from "../lib/errors";
@@ -68,9 +68,17 @@ function TxLink({ tx }: { tx?: TxRef }) {
   if (!tx) return null;
   return (
     <span className="tx mono">
-      <ExtLink href={explorerTx(tx.hash)} label={`Transaction ${tx.hash}`}>
+      <a href={appTx(tx.hash)} data-testid="timeline-tx" title={`${tx.hash}: receipt read from the RPC`}>
         tx {shortAddr(tx.hash)}
-      </ExtLink>
+      </a>
+      {explorerTx(tx.hash) && (
+        <>
+          {" · "}
+          <ExtLink href={explorerTx(tx.hash)} label={`Transaction ${tx.hash} on OKLink (may lag)`}>
+            OKLink
+          </ExtLink>
+        </>
+      )}
     </span>
   );
 }
@@ -205,6 +213,33 @@ function SellerHistoryPanel({ data, decimals, symbol }: { data: InvoiceData; dec
   );
 }
 
+/** Invoice lifecycle: Draft, Funded, Submitted, Released (or the terminal Refunded / Cancelled / Completed). */
+function Lifecycle({ data }: { data: InvoiceData }) {
+  const inv = data.invoice;
+  const st = displayState(inv, data.milestones);
+  const c = inv.state; // 1 Draft, 2 Funded, 3 Completed, 4 Refunded, 5 Cancelled
+  const anySubmitted = data.milestones.some((m) => m.submittedAt > 0n);
+  const end = st === "Refunded" ? "Refunded" : st === "Cancelled" ? "Cancelled" : st === "Completed" ? "Completed" : "Released";
+  const items: { label: string; done: boolean; current: boolean }[] = [
+    { label: "Draft", done: c >= 1, current: c === 1 },
+    { label: "Funded", done: inv.fundedAt > 0n, current: st === "Funded" },
+    { label: "Submitted", done: anySubmitted, current: st === "Submitted" || st === "Partly released" },
+    { label: end, done: c >= 3, current: c >= 3 },
+  ];
+  return (
+    <ol className="lifecycle" aria-label="Invoice status" data-testid="lifecycle">
+      {items.map((x, k) => (
+        <li key={k} className={`lc-item${x.done ? " lc-done" : ""}${x.current ? " lc-current" : ""}`} data-done={x.done ? "true" : "false"} aria-current={x.current ? "step" : undefined}>
+          <span className="lc-dot num" aria-hidden="true">
+            {x.done ? "\u2713" : k + 1}
+          </span>
+          <span className="lc-label">{x.label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function MilestoneStepper({ data, amt }: { data: InvoiceData; amt: (v: bigint) => ReactNode }) {
   const ms = data.milestones;
   const total = data.invoice.totalAmount || 1n;
@@ -244,7 +279,7 @@ function Receipt({ idParam }: { idParam: string }) {
   const escrow = useEscrowInfo();
   const token = useTokenInfo(q.data?.invoice.token);
   const now = useChainNow();
-  const txs = useInvoiceTxs(id);
+  const txs = useInvoiceTxs(id, q.data);
   const tape = useTapeName(q.data ? q.data.invoice.container : null);
 
   if (id === null)
@@ -313,7 +348,7 @@ function Receipt({ idParam }: { idParam: string }) {
   const hasArbiter = i.arbiter !== ZERO_ADDR;
 
   return (
-    <div className="receipt-layout">
+    <div className={`receipt-layout${i.state <= 2 ? " has-mobile-bar" : ""}`}>
       <article className="card receipt-card" data-testid="receipt" aria-labelledby="receipt-title">
         <header className="receipt-head">
           <div className="receipt-head-main">
@@ -353,6 +388,7 @@ function Receipt({ idParam }: { idParam: string }) {
           </p>
         </div>
 
+        <Lifecycle data={data} />
         <MilestoneStepper data={data} amt={amt} />
         {standIn && (
           <p className="tag tag-demo" data-testid="standin-label">
@@ -542,7 +578,16 @@ function Receipt({ idParam }: { idParam: string }) {
 
         <h2 className="section-h">Timeline</h2>
         <Timeline data={data} txs={txs.data ?? []} />
-        {txs.isError && <p className="muted small">Transaction links unavailable (the RPC log query failed). Times above come from contract state.</p>}
+        {txs.isLoading && <p className="muted small" data-testid="txs-loading">Finding the transactions for each step on {config.chain.name}…</p>}
+        {txs.isError && (
+          <p className="muted small" data-testid="txs-error">
+            Transaction links could not be read from the RPC right now. Times above come from contract state.{" "}
+            <button type="button" className="link-btn" onClick={() => txs.refetch()}>
+              Retry
+            </button>
+          </p>
+        )}
+        {txs.data && txs.data.length > 0 && <p className="muted small">Each tx link opens its receipt read straight from the {config.chain.name} RPC. OKLink links are secondary: its X Layer index can lag behind the chain.</p>}
 
         <footer className="receipt-foot">
           <div className="print-only print-qr">
@@ -560,7 +605,8 @@ function Receipt({ idParam }: { idParam: string }) {
         {!hasArbiter && (i.state === 1 || i.state === 2) && <NoArbiterWarning context="receipt" />}
         <Warnings />
       </aside>
-      <div className="mobile-bar no-print" aria-label="Receipt summary">
+      {i.state <= 2 && (
+      <div className="mobile-bar no-print" aria-label="Receipt summary" data-testid="mobile-bar">
         <div className="mobile-bar-info">
           <span className="mobile-bar-state">{state}</span>
           <span className="num mobile-bar-amt">{amt(i.totalAmount)}</span>
@@ -569,6 +615,7 @@ function Receipt({ idParam }: { idParam: string }) {
           Next step
         </a>
       </div>
+      )}
     </div>
   );
 }

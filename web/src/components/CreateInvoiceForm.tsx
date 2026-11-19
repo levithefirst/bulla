@@ -1,5 +1,5 @@
-import { useId, useMemo, useState, type ReactNode } from "react";
-import { decodeEventLog, getAddress, isAddress, isHex, keccak256, parseUnits, toBytes, type Hex } from "viem";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { decodeEventLog, getAddress, isAddress, isHex, keccak256, toBytes, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { mockProcessorAbi } from "../abi/mockProcessor";
 import { config, explorerAddress } from "../config";
@@ -13,6 +13,7 @@ import { sendWrite } from "../lib/write";
 import { parseError } from "../lib/errors";
 import { notifyCounterparty } from "../lib/notify";
 import { useToasts } from "./Toasts";
+import { addressError, parseAmount, totalError } from "../../../shared/validate";
 import { UnauditedWarning, CircuitHolderWarning, NoArbiterWarning } from "./Warnings";
 
 function toLocalInput(d: Date) {
@@ -23,6 +24,22 @@ function toLocalInput(d: Date) {
 type Field = "buyer" | "due" | "circuit" | "arbiter" | "milestones" | "deliveryHash" | "memo";
 type Row = { label: string; amount: string };
 const MAX_MILESTONES = 10;
+
+/** Create-form draft, kept in localStorage so a refresh does not wipe it. Cleared after a successful create. */
+type Draft = { buyer: string; rows: Row[]; due: string; processor: string; circuitId: string; payToContainer: boolean; arbiter: string; deliveryHash: string; memo: string };
+export const DRAFT_KEY = `bulla.createDraft.v1.${config.networkKey}`;
+const circuitKey = (a: string) => `bulla.lastCircuit.v1.${config.networkKey}.${a.toLowerCase()}`;
+function loadDraft(): Partial<Draft> {
+  try {
+    const j = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null");
+    if (!j || typeof j !== "object") return {};
+    const rows = Array.isArray(j.rows) ? (j.rows as unknown[]).slice(0, MAX_MILESTONES).map((r) => ({ label: String((r as Row)?.label ?? "").slice(0, 80), amount: String((r as Row)?.amount ?? "").slice(0, 40) })) : undefined;
+    const str = (v: unknown, max = 200) => (typeof v === "string" ? v.slice(0, max) : undefined);
+    return { buyer: str(j.buyer, 64), rows: rows && rows.length ? rows : undefined, due: str(j.due, 32), processor: str(j.processor, 64), circuitId: str(j.circuitId, 40), payToContainer: typeof j.payToContainer === "boolean" ? j.payToContainer : undefined, arbiter: str(j.arbiter, 64), deliveryHash: str(j.deliveryHash, 300), memo: str(j.memo, 140) };
+  } catch {
+    return {};
+  }
+}
 
 function FormField({ id, label, hint, error, children }: { id: string; label: string; hint?: ReactNode; error?: string; children: ReactNode }) {
   return (
@@ -52,15 +69,46 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
   const fid = (f: string) => `${uid}-${f}`;
   const standIn = !!config.tapeout?.standIn;
 
-  const [buyer, setBuyer] = useState("");
-  const [rows, setRows] = useState<Row[]>([{ label: "", amount: "" }]);
-  const [due, setDue] = useState(() => toLocalInput(new Date(Date.now() + 14 * 86400_000)));
-  const [processor, setProcessor] = useState(config.tapeout?.processor ?? "");
-  const [circuitId, setCircuitId] = useState("");
-  const [payToContainer, setPayToContainer] = useState(false);
-  const [arbiter, setArbiter] = useState("");
-  const [deliveryHash, setDeliveryHash] = useState("");
-  const [memo, setMemo] = useState("");
+  const [draft] = useState(loadDraft);
+  const [buyer, setBuyer] = useState(draft.buyer ?? "");
+  const [rows, setRows] = useState<Row[]>(draft.rows ?? [{ label: "", amount: "" }]);
+  const [due, setDue] = useState(() => draft.due ?? toLocalInput(new Date(Date.now() + 14 * 86400_000)));
+  const [processor, setProcessor] = useState(draft.processor ?? config.tapeout?.processor ?? "");
+  const [circuitId, setCircuitId] = useState(draft.circuitId ?? "");
+  const [payToContainer, setPayToContainer] = useState(draft.payToContainer ?? false);
+  const [arbiter, setArbiter] = useState(draft.arbiter ?? "");
+  const [deliveryHash, setDeliveryHash] = useState(draft.deliveryHash ?? "");
+  const [memo, setMemo] = useState(draft.memo ?? "");
+  /** Fields the user has left (blur) or changed; their live errors show inline. Submit marks everything. */
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const touch = (k: string) => setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
+  const done = useRef(false);
+
+  useEffect(() => {
+    if (done.current) return;
+    try {
+      const d: Draft = { buyer, rows, due, processor, circuitId, payToContainer, arbiter, deliveryHash, memo };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [buyer, rows, due, processor, circuitId, payToContainer, arbiter, deliveryHash, memo]);
+
+  // Prefill the processor and circuit this wallet last billed with (stored locally after a successful create).
+  // TapeOut circuits are not enumerable per owner (435 processors on mainnet, no tokenOfOwnerByIndex), so nothing is guessed.
+  useEffect(() => {
+    if (!w.address || circuitId.trim()) return;
+    try {
+      const j = JSON.parse(localStorage.getItem(circuitKey(w.address)) ?? "null");
+      if (j && typeof j.processor === "string" && typeof j.circuitId === "string" && /^\d+$/.test(j.circuitId)) {
+        setProcessor(j.processor);
+        setCircuitId(j.circuitId);
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w.address]);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [busy, setBusy] = useState(false);
   const [minting, setMinting] = useState(false);
@@ -72,25 +120,16 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
   const circuit = useCircuitCheck({ factory: escrow.data?.factory, opener: escrow.data?.opener, processorInput: processor, circuitId, account: w.address });
   const c = circuit.data;
 
-  const parsed = useMemo(
-    () =>
-      rows.map((r) => {
-        if (decimals === undefined) return null;
-        try {
-          const a = parseUnits(r.amount.trim() || "0", decimals);
-          return a > 0n ? a : null;
-        } catch {
-          return null;
-        }
-      }),
-    [rows, decimals],
-  );
+  const dec = decimals ?? 6; // both X Layer deployments use 6-decimal USDC / DemoUSD; submit still waits for the on-chain value
+  const amountResults = useMemo(() => rows.map((r) => parseAmount(r.amount, dec, symbol)), [rows, dec, symbol]);
+  const parsed = amountResults.map((r) => (r.ok ? r.value : null));
   const amounts = parsed.every((x) => x !== null) ? (parsed as bigint[]) : null;
   const total = amounts ? amounts.reduce((acc, x) => acc + x, 0n) : null;
+  const totalErr = total !== null ? totalError(total, dec, symbol) : null;
   const totalFee = amounts ? amounts.reduce((acc, x) => acc + quoteFee(x, feeBps).fee, 0n) : null;
   const dueTs = Math.floor(new Date(due).getTime() / 1000) || 0;
   const nowTs = Number(now.data ?? BigInt(Math.floor(Date.now() / 1000)));
-  const f = (x: bigint) => (decimals !== undefined ? fmtAmount(x, decimals, symbol) : "-");
+  const f = (x: bigint) => fmtAmount(x, decimals ?? dec, symbol);
   const clearErr = (k: Field) => errors[k] && setErrors((x) => ({ ...x, [k]: undefined }));
 
   function setRow(i: number, patch: Partial<Row>) {
@@ -98,25 +137,34 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
     clearErr("milestones");
   }
 
+  const reserved = { "the escrow contract": escrow.data?.address ?? config.escrow, "the token contract": escrow.data?.token ?? config.token, "the TapeOut processor": isAddress(processor.trim()) ? (processor.trim() as Address) : null };
+  const buyerErr = addressError(buyer, "buyer", { self: w.address, reserved });
+  const labelErr = (r: Row) => (!r.label.trim() ? "Give this milestone a short label." : new TextEncoder().encode(r.label.trim()).length > 80 ? "Labels can be at most 80 bytes." : null);
+  const dueErr = !dueTs ? "Pick a due date." : dueTs <= nowTs ? "Pick a time in the future." : null;
+  const arbiterErr = (() => {
+    const a = arbiter.trim();
+    if (!a) return null;
+    const base = addressError(a, "arbiter", { self: w.address, reserved });
+    if (base) return base;
+    return isAddress(buyer.trim()) && getAddress(a) === getAddress(buyer.trim()) ? "The arbiter cannot be the buyer." : null;
+  })();
+  const show = (k: string, err: string | null | undefined) => (touched[k] || touched.all ? err ?? undefined : undefined);
+
   function validate() {
+    setTouched((t) => ({ ...t, all: true }));
     const e: Partial<Record<Field, string>> = {};
     const b = buyer.trim();
-    if (!isAddress(b)) e.buyer = "Enter a valid 0x address (42 characters).";
-    else if (w.address && getAddress(b) === w.address) e.buyer = "The buyer cannot be your own address.";
+    if (buyerErr) e.buyer = buyerErr;
     if (decimals === undefined) e.milestones = "Token details are still loading.";
-    else if (rows.some((r) => !r.label.trim())) e.milestones = "Give every milestone a short label.";
-    else if (rows.some((r) => new TextEncoder().encode(r.label.trim()).length > 80)) e.milestones = "Labels can be at most 80 bytes.";
-    else if (parsed.some((x) => x === null)) e.milestones = "Every milestone needs an amount greater than zero.";
-    if (!dueTs || dueTs <= nowTs) e.due = "Pick a time in the future.";
+    else if (rows.some((r) => labelErr(r))) e.milestones = "Give every milestone a short label (at most 80 bytes).";
+    else if (amountResults.some((r) => !r.ok)) e.milestones = "Fix the milestone amounts marked above.";
+    else if (totalErr) e.milestones = totalErr;
+    if (dueErr) e.due = dueErr;
     if (!c) e.circuit = circuit.isFetching ? "Still checking the circuit on chain." : "Enter your TapeOut processor and circuit #ID.";
     else if (!c.ok) e.circuit = c.reason;
     else if (!c.youHold) e.circuit = `Circuit #${circuitId} is held by ${shortAddr(c.holder)}, not the connected wallet. Only the holder can bill with it.`;
     const a = arbiter.trim();
-    if (a) {
-      if (!isAddress(a)) e.arbiter = "Enter a valid 0x address, or leave it empty.";
-      else if (isAddress(b) && getAddress(a) === getAddress(b)) e.arbiter = "The arbiter cannot be the buyer.";
-      else if (w.address && getAddress(a) === w.address) e.arbiter = "The arbiter cannot be you.";
-    }
+    if (arbiterErr) e.arbiter = arbiterErr;
     setErrors(e);
     if (Object.keys(e).length || !escrow.data || !c || !c.ok) return null;
     const d = deliveryHash.trim();
@@ -186,6 +234,13 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
       if (id === null) throw new Error("Invoice created but the InvoiceCreated event was not found.");
       toasts.update(tid, { kind: "success", title: `Invoice #${id} created`, body: "Share the receipt link with your buyer." });
       void notifyCounterparty({ kind: "invoiceCreated", invoiceId: id, to: p.buyer });
+      done.current = true;
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+        if (w.address) localStorage.setItem(circuitKey(w.address), JSON.stringify({ processor: processor.trim(), circuitId: circuitId.trim() }));
+      } catch {
+        /* storage unavailable */
+      }
       onCreated(id);
     } catch (err) {
       const msg = parseError(err);
@@ -196,11 +251,12 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
     }
   }
 
-  const done1 = isAddress(buyer.trim()) && dueTs > nowTs;
-  const done2 = total !== null && total > 0n;
+  const done1 = !buyerErr && !dueErr;
+  const done2 = total !== null && total > 0n && !totalErr && rows.every((r) => !labelErr(r));
   const done3 = !!(c && c.ok && c.youHold);
-  const buyerLive = buyer.trim() && !isAddress(buyer.trim()) ? "That does not look like a 0x address yet (42 characters)." : undefined;
-  const blocked = !w.isConnected || w.wrongNetwork || busy || config.mock || !config.escrow;
+  const buyerLive = buyer.trim() ? show("buyer", buyerErr) : undefined;
+  const liveInvalid = !!(buyerErr || dueErr || arbiterErr || totalErr || amountResults.some((r) => !r.ok) || rows.some((r) => labelErr(r)));
+  const blocked = !w.isConnected || w.wrongNetwork || busy || config.mock || !config.escrow || (!!touched.all && liveInvalid);
   const described = (k: string, hasErr: boolean) => (hasErr ? `${fid(k)}-err` : `${fid(k)}-hint`);
   const payee = c && c.ok ? (payToContainer ? c.container : c.holder) : null;
 
@@ -249,10 +305,10 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
           </legend>
           <p className="step-sub muted small">Who pays, by when, and what the receipt says.</p>
           <FormField id={fid("buyer")} label="Buyer address" hint="The only wallet that can fund, release, or claim the refund." error={errors.buyer ?? buyerLive}>
-            <input id={fid("buyer")} name="buyer" className="mono" placeholder="0x…" autoComplete="off" spellCheck={false} value={buyer} onChange={(e) => (setBuyer(e.target.value), clearErr("buyer"))} aria-invalid={!!(errors.buyer ?? buyerLive)} aria-describedby={described("buyer", !!(errors.buyer ?? buyerLive))} />
+            <input id={fid("buyer")} name="buyer" className="mono" placeholder="0x…" autoComplete="off" spellCheck={false} value={buyer} onChange={(e) => (setBuyer(e.target.value), clearErr("buyer"))} onBlur={() => touch("buyer")} data-testid="buyer-input" aria-invalid={!!(errors.buyer ?? buyerLive)} aria-describedby={described("buyer", !!(errors.buyer ?? buyerLive))} />
           </FormField>
-          <FormField id={fid("due")} label="Due date and refund time-lock" hint="After this, anything not released can be refunded to the buyer. Leave review time." error={errors.due}>
-            <input id={fid("due")} name="due" type="datetime-local" className="num" value={due} onChange={(e) => (setDue(e.target.value), clearErr("due"))} aria-invalid={!!errors.due} aria-describedby={described("due", !!errors.due)} />
+          <FormField id={fid("due")} label="Due date and refund time-lock" hint="After this, anything not released can be refunded to the buyer. Leave review time." error={errors.due ?? show("due", dueErr)}>
+            <input id={fid("due")} name="due" type="datetime-local" className="num" value={due} onChange={(e) => (setDue(e.target.value), clearErr("due"), touch("due"))} onBlur={() => touch("due")} aria-invalid={!!(errors.due ?? show("due", dueErr))} aria-describedby={described("due", !!(errors.due ?? show("due", dueErr)))} data-testid="due-input" />
           </FormField>
           <FormField id={fid("memo")} label="Description" hint="Shown on the public receipt. Up to 140 characters.">
             <input id={fid("memo")} name="memo" maxLength={140} placeholder="Logo design" value={memo} onChange={(e) => setMemo(e.target.value)} />
@@ -269,14 +325,17 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
           </legend>
           <p className="step-sub muted small">Up to 10 deliverables. The buyer funds all of them up front and releases each one.</p>
           <ol className="ms-editor" data-testid="milestones-editor">
-            {rows.map((r, i) => (
-              <li key={i} className="ms-row">
+            {rows.map((r, i) => {
+              const amtErr = show(`amount-${i}`, amountResults[i].ok ? null : amountResults[i].error);
+              const lblErr = show(`label-${i}`, labelErr(r));
+              return (
+              <li key={i} className={`ms-row${amtErr || lblErr ? " ms-row-invalid" : ""}`}>
                 <span className="ms-n num" aria-hidden="true">
                   {i + 1}
                 </span>
-                <input name={`label-${i}`} aria-label={`Milestone ${i + 1} label`} placeholder={i === 0 ? "Wireframes" : "Next deliverable"} maxLength={80} value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} />
+                <input name={`label-${i}`} aria-label={`Milestone ${i + 1} label`} placeholder={i === 0 ? "Wireframes" : "Next deliverable"} maxLength={80} value={r.label} onChange={(e) => setRow(i, { label: e.target.value })} onBlur={() => touch(`label-${i}`)} aria-invalid={!!lblErr} />
                 <div className="input-affix ms-amount">
-                  <input name={`amount-${i}`} aria-label={`Milestone ${i + 1} amount in ${symbol}`} className="num" inputMode="decimal" placeholder="100.00" value={r.amount} onChange={(e) => setRow(i, { amount: e.target.value })} />
+                  <input name={`amount-${i}`} aria-label={`Milestone ${i + 1} amount in ${symbol}`} className="num" inputMode="decimal" placeholder="100.00" value={r.amount} onChange={(e) => (setRow(i, { amount: e.target.value }), touch(`amount-${i}`))} onBlur={() => touch(`amount-${i}`)} aria-invalid={!!amtErr} aria-describedby={amtErr ? `${fid("amt")}-${i}-err` : undefined} data-testid={`amount-${i}`} />
                   <span className="affix" aria-hidden="true">
                     {symbol}
                   </span>
@@ -284,10 +343,16 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
                 <button type="button" className="copy-btn" aria-label={`Remove milestone ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((_, k) => k !== i))}>
                   ×
                 </button>
+                {(lblErr || amtErr) && (
+                  <p className="field-error ms-row-error" id={`${fid("amt")}-${i}-err`} data-testid={`ms-error-${i}`}>
+                    {[lblErr, amtErr].filter(Boolean).join(" ")}
+                  </p>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ol>
-          {errors.milestones && <p className="field-error">{errors.milestones}</p>}
+          {(errors.milestones || (totalErr && (touched.all || Object.keys(touched).some((k) => k.startsWith("amount"))))) && <p className="field-error" data-testid="milestones-error">{errors.milestones ?? totalErr}</p>}
           <button type="button" className="btn btn-ghost btn-sm" disabled={rows.length >= MAX_MILESTONES} onClick={() => setRows((rs) => [...rs, { label: "", amount: "" }])} data-testid="add-milestone">
             Add milestone ({rows.length}/{MAX_MILESTONES})
           </button>
@@ -363,8 +428,8 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
               </span>
             </span>
           </label>
-          <FormField id={fid("arbiter")} label="Arbiter (optional, recommended)" hint="Someone both sides trust. The buyer accepts them when funding. They can release or refund a submitted milestone, and take no fee." error={errors.arbiter}>
-            <input id={fid("arbiter")} name="arbiter" className="mono" placeholder="0x… or leave empty" autoComplete="off" spellCheck={false} value={arbiter} onChange={(e) => (setArbiter(e.target.value), clearErr("arbiter"))} aria-invalid={!!errors.arbiter} aria-describedby={described("arbiter", !!errors.arbiter)} />
+          <FormField id={fid("arbiter")} label="Arbiter (optional, recommended)" hint="Someone both sides trust. The buyer accepts them when funding. They can release or refund a submitted milestone, and take no fee." error={errors.arbiter ?? show("arbiter", arbiterErr)}>
+            <input id={fid("arbiter")} name="arbiter" className="mono" placeholder="0x… or leave empty" autoComplete="off" spellCheck={false} value={arbiter} onChange={(e) => (setArbiter(e.target.value), clearErr("arbiter"))} onBlur={() => touch("arbiter")} aria-invalid={!!(errors.arbiter ?? show("arbiter", arbiterErr))} aria-describedby={described("arbiter", !!(errors.arbiter ?? show("arbiter", arbiterErr)))} data-testid="arbiter-input" />
           </FormField>
           {!arbiter.trim() && <NoArbiterWarning context="create" />}
           <FormField id={fid("terms")} label="Agreed scope hash (optional)" hint="A bytes32, or any text (it is hashed).">
@@ -388,29 +453,29 @@ export function CreateInvoiceForm({ onCreated }: { onCreated: (id: bigint) => vo
 
       <aside className="card summary" aria-labelledby={`${uid}-sum`}>
         <p className="eyebrow-plain">Live summary</p>
-        <h2 id={`${uid}-sum`} className="summary-total num">{total !== null ? f(total) : `0 ${symbol}`}</h2>
+        <h2 id={`${uid}-sum`} className="summary-total num" data-testid="summary-total">{total !== null && !totalErr ? f(total) : `- ${symbol}`}</h2>
         <p className="summary-memo muted">{memo.trim() || "No description yet"}</p>
         <ul className="summary-ms">
           {rows.map((r, k) => (
             <li key={k}>
               <span className="num summary-ms-n">{k + 1}</span>
               <span className="summary-ms-label">{r.label.trim() || "Untitled milestone"}</span>
-              <span className="num summary-ms-amt">{r.amount.trim() ? `${r.amount.trim()} ${symbol}` : "-"}</span>
+              <span className="num summary-ms-amt" data-testid={`summary-amt-${k}`}>{amountResults[k].ok ? f(amountResults[k].value) : r.amount.trim() ? "invalid" : "-"}</span>
             </li>
           ))}
         </ul>
         <dl className="lines">
           <div>
             <dt>Buyer deposits ({rows.length} milestone{rows.length > 1 ? "s" : ""})</dt>
-            <dd className="num">{total !== null ? f(total) : "-"}</dd>
+            <dd className="num">{total !== null && !totalErr ? f(total) : "-"}</dd>
           </div>
           <div>
             <dt>Fees if all released ({(feeBps / 100).toFixed(2)}% each)</dt>
-            <dd className="num">{totalFee !== null ? f(totalFee) : "-"}</dd>
+            <dd className="num">{totalFee !== null && !totalErr ? f(totalFee) : "-"}</dd>
           </div>
           <div className="lines-total">
             <dt>Paid out if all released</dt>
-            <dd className="num">{total !== null && totalFee !== null ? f(total - totalFee) : "-"}</dd>
+            <dd className="num">{total !== null && totalFee !== null && !totalErr ? f(total - totalFee) : "-"}</dd>
           </div>
           <div>
             <dt>Paid to</dt>

@@ -147,7 +147,7 @@ export async function startLocalStack(opts: { rpcPort: number; webPort: number; 
       await pub.request({ method: "evm_setIntervalMining" as never, params: [Number(process.env.E2E_BLOCK_MS)] as never });
       console.log(`[${opts.tag}] interval mining: one block every ${process.env.E2E_BLOCK_MS} ms`);
     }
-    procs.push(spawn("npx", ["vite", "preview", "--outDir", opts.outDir, "--port", String(opts.webPort), "--strictPort"], { cwd: path.join(root, "web"), stdio: ["ignore", "ignore", "inherit"], detached: true }));
+    procs.push(spawn("npx", ["vite", "preview", "--outDir", opts.outDir, "--port", String(opts.webPort), "--strictPort", "--host", "127.0.0.1"], { cwd: path.join(root, "web"), stdio: ["ignore", "ignore", "inherit"], detached: true }));
     const baseURL = `http://127.0.0.1:${opts.webPort}/`;
     await waitFor(baseURL);
     return { rpc: RPC, baseURL, escrow, token, deployBlock: Number(escrowRcpt.blockNumber), judge, tapeout, keys, stop };

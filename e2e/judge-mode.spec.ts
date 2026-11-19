@@ -45,11 +45,16 @@ test(`judge mode: one tap from the landing page to Released in under ${MAX_MS / 
     await expect(step.getByTestId("step-tx")).toContainText(/0x[0-9a-f]{4}/i);
   }
   if (TESTNET) {
-    await expect(page.getByTestId("step-explorer").first()).toHaveText("Explorer (may lag on testnet)");
+    await expect(page.getByTestId("step-explorer").first()).toHaveText("OKLink (index lags)");
     const hrefs = await page.getByTestId("step-explorer").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href));
     expect(hrefs).toHaveLength(12);
-    for (const h of hrefs) expect(h).toMatch(/^https:\/\/web3\.okx\.com\/explorer\/x-layer-testnet\/tx\/0x[0-9a-f]{64}$/);
+    for (const h of hrefs) expect(h).toMatch(/^https:\/\/www\.oklink\.com\/x-layer-testnet\/tx\/0x[0-9a-f]{64}$/);
   }
+
+  // Primary per-step link: the app's own receipt page, read from the RPC.
+  const rpcLinks = await page.getByTestId("step-rpc-link").evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).getAttribute("href")));
+  expect(rpcLinks).toHaveLength(12);
+  for (const h of rpcLinks) expect(h).toMatch(/^#\/tx\/0x[0-9a-f]{64}$/);
 
   // In-app receipts read from the RPC (the testnet explorer can lag): expand the final release.
   const last = page.getByTestId("step-release1");
@@ -108,7 +113,7 @@ test("judge mode: a double tap on Run starts exactly one run (12 confirmed steps
     b.click();
     b.click();
   });
-  await expect(run).toHaveText("Running…");
+  await expect(run).toHaveText(/^(Running|Finishing)…$/);
   await expect(run).toBeDisabled();
   await expect(page.getByTestId("judge-state")).toHaveText("Released", { timeout: MAX_MS });
   await expect(page.getByTestId("judge-elapsed")).toHaveAttribute("data-ms", /^\d+$/);

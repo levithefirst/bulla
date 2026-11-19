@@ -316,3 +316,123 @@ test("responsive at 375px and keyboard skip link, no wallet", async ({ browser }
   await page.keyboard.press("Tab");
   await expect(page.locator(".skip-link")).toBeFocused();
 });
+
+test("create form validates amounts and addresses live, with no wallet", async ({ browser }) => {
+  const page = await (await browser.newContext()).newPage();
+  await page.goto("#/create");
+  const amount = page.getByTestId("amount-0");
+  const err = page.getByTestId("ms-error-0");
+  const cases: [string, RegExp][] = [
+    ["0", /greater than zero/],
+    ["-5", /greater than zero/],
+    ["1e30", /without exponents/],
+    ["abc", /Enter a number/],
+    ["1,5", /not a comma/],
+    ["0.0000001", /6 decimals at most/],
+    ["1.1234567", /6 decimals at most/],
+    ["999999999999999999999999999999", /At most 1,000,000/],
+  ];
+  for (const [v, re] of cases) {
+    await amount.fill(v);
+    await expect(err, v).toContainText(re);
+    await expect(page.getByTestId("summary-amt-0"), v).toHaveText("invalid");
+    await expect(page.getByTestId("summary-total")).not.toContainText(v);
+  }
+  await amount.fill("");
+  await amount.blur();
+  await expect(err).toContainText(/Enter an amount/);
+  await amount.fill("12.5");
+  await expect(page.getByTestId("summary-amt-0")).toHaveText("12.5 mUSDC");
+  // Two valid amounts whose sum is above the per-invoice cap.
+  await amount.fill("600000");
+  await page.getByTestId("add-milestone").click();
+  await page.getByTestId("amount-1").fill("600000");
+  await expect(page.getByTestId("milestones-error")).toContainText(/above the 1,000,000 mUSDC limit/);
+
+  const buyer = page.getByTestId("buyer-input");
+  for (const [v, re] of [
+    ["0x0000000000000000000000000000000000000000", /zero address/],
+    [runtime.escrow, /escrow contract/],
+    [runtime.token, /token contract/],
+    ["0x1234", /valid 0x address/],
+  ] as [string, RegExp][]) {
+    await buyer.fill(v);
+    await buyer.blur();
+    await expect(page.locator(".field-invalid").filter({ has: buyer })).toContainText(re);
+  }
+  await expect(page.locator(".step-rail li").first()).not.toHaveClass(/rail-done/);
+  await buyer.fill(keys.buyer.address);
+  await expect(page.locator(".field-invalid").filter({ has: buyer })).toHaveCount(0);
+
+  const due = page.getByTestId("due-input");
+  await due.fill(await localInput(page, (await chainNow()) - 3600));
+  await due.blur();
+  await expect(page.locator(".field-invalid").filter({ has: due })).toContainText(/in the future/);
+
+  const arb = page.getByTestId("arbiter-input");
+  await arb.fill("not-an-address");
+  await arb.blur();
+  await expect(page.locator(".field-invalid").filter({ has: arb })).toContainText(/valid 0x address/);
+  await arb.fill(keys.buyer.address);
+  await expect(page.locator(".field-invalid").filter({ has: arb })).toContainText(/cannot be the buyer/);
+});
+
+test("create form draft survives a refresh and clears after a successful create", async ({ browser }) => {
+  const seller = await walletPage(browser, "seller");
+  await seller.goto("#/create");
+  await seller.locator('input[name="buyer"]').fill(keys.buyer.address);
+  await seller.locator('input[name="label-0"]').fill("Draft milestone");
+  await seller.locator('input[name="amount-0"]').fill("42");
+  await seller.locator('input[name="memo"]').fill("Draft memo");
+  await seller.reload();
+  await expect(seller.locator('input[name="buyer"]')).toHaveValue(keys.buyer.address);
+  await expect(seller.locator('input[name="label-0"]')).toHaveValue("Draft milestone");
+  await expect(seller.locator('input[name="amount-0"]')).toHaveValue("42");
+  await expect(seller.locator('input[name="memo"]')).toHaveValue("Draft memo");
+  await connect(seller);
+  await seller.locator('input[name="due"]').fill(await localInput(seller, (await chainNow()) + 7 * 86400));
+  await seller.locator('input[name="circuitId"]').fill("1");
+  await expect(seller.getByTestId("circuit-ok")).toBeVisible();
+  await seller.getByTestId("create-submit").click();
+  await seller.waitForURL(/#\/invoice\/\d+$/);
+  await expect(seller.getByTestId("state")).toHaveText("Draft");
+  expect(await seller.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("bulla.createDraft")))).toHaveLength(0);
+  await seller.goto("#/create");
+  await expect(seller.locator('input[name="buyer"]')).toHaveValue("");
+  await expect(seller.locator('input[name="memo"]')).toHaveValue("");
+  // The circuit this wallet just billed with is remembered for its next invoice.
+  await expect(seller.locator('input[name="circuitId"]')).toHaveValue("1");
+});
+
+test("released receipt at 420px: lifecycle stepper, no sticky Next step, header links reachable, tx links open the RPC receipt", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 420, height: 860 } })).newPage();
+  await page.goto("#/invoice/1");
+  await expect(page.getByTestId("state")).toHaveText("Released");
+  const lc = page.getByTestId("lifecycle");
+  await expect(lc).toBeVisible();
+  await expect(lc.locator("li")).toHaveText([/Draft/, /Funded/, /Submitted/, /Released/]);
+  await expect(lc.locator('li[data-done="true"]')).toHaveCount(4);
+  await expect(page.getByTestId("mobile-bar")).toHaveCount(0);
+  await expect(page.getByTestId("nav-new")).toBeVisible();
+  await expect(page.locator(".net-pill")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  const tx = page.getByTestId("timeline-tx").first();
+  await expect(tx).toHaveAttribute("href", /^#\/tx\/0x[0-9a-f]{64}$/);
+  await tx.click();
+  await expect(page.getByTestId("tx-page")).toBeVisible();
+  await expect(page.getByTestId("tx-status")).toHaveText("Success");
+  await expect(page.getByTestId("tx-events")).toContainText("InvoiceCreated");
+});
+
+test("funded receipt at 420px keeps the sticky Next step bar", async ({ browser }) => {
+  const seller = await walletPage(browser, "seller");
+  const buyer = await walletPage(browser, "buyer");
+  const id = await createInvoice(seller, "5", (await chainNow()) + 7 * 86400, "Sticky bar check");
+  await fundAsBuyer(buyer, id);
+  const page = await (await browser.newContext({ viewport: { width: 420, height: 860 } })).newPage();
+  await page.goto(`#/invoice/${id}`);
+  await expect(page.getByTestId("state")).toHaveText("Funded");
+  await expect(page.getByTestId("mobile-bar")).toBeVisible();
+  await expect(page.getByTestId("lifecycle").locator('li[data-done="true"]')).toHaveCount(2);
+});

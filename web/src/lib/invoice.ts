@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { erc20Abi, parseAbi, type Address, type Hex } from "viem";
 import { bullaEscrowAbi } from "../abi/bullaEscrow";
 import { config } from "../config";
-import { client } from "./client";
-import { ethCall, getLogs, latestTimestamp } from "../../../shared/rpc";
+import { client, fallbackClient } from "./client";
+import { ethCall, getInvoiceLogsAt, getLogs, latestTimestamp, withFallback } from "../../../shared/rpc";
 import { MOCK_INVOICES, MOCK_TOKEN } from "./mock";
 import { useEscrowTarget, type EscrowTarget } from "./escrowTarget";
 import { assertOfficialTapeOut } from "../../../shared/deployments";
@@ -157,20 +157,38 @@ export function useChainNow() {
   });
 }
 
-/** Best-effort transaction hashes for the timeline. Failure (e.g. RPC log range limits) is not fatal. */
-export function useInvoiceTxs(id: bigint | null) {
+/** On-chain timestamps that mark an event of this invoice (create, fund, submit, release/refund, close). */
+export function invoiceTimestamps(d: InvoiceData): bigint[] {
+  const i = d.invoice;
+  return [i.createdAt, i.fundedAt, i.closedAt, ...d.milestones.flatMap((m) => [m.submittedAt, m.closedAt])].filter((t) => t > 0n);
+}
+
+/**
+ * Transaction hashes for the timeline. The public X Layer RPCs cap eth_getLogs at 100 blocks, so on X Layer the
+ * logs are read only around the blocks of the invoice's own on-chain timestamps (shared/rpc getInvoiceLogsAt),
+ * on the primary RPC with the second public RPC as a fallback. Local nodes take one full-range query.
+ */
+export function useInvoiceTxs(id: bigint | null, data?: InvoiceData) {
   const t = useEscrowTarget();
+  const stamps = data ? invoiceTimestamps(data) : [];
   return useQuery({
-    queryKey: ["invoiceTxs", t.address, id?.toString()],
-    enabled: id !== null && !config.mock && !!t.address,
+    queryKey: ["invoiceTxs", t.address, id?.toString(), stamps.join(",")],
+    enabled: id !== null && !config.mock && !!t.address && !!data,
     queryFn: async (): Promise<TxRef[]> => {
-      const logs = await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
+      const rpc = fallbackClient ? withFallback(client, fallbackClient) : client;
+      const logs = config.isXLayer ? await getInvoiceLogsAt(rpc, t.address!, bullaEscrowAbi, id!, stamps, t.deployBlock) : await getLogs(client, t.address!, bullaEscrowAbi, t.deployBlock);
+      const seen = new Set<string>();
       return logs
         .filter((l) => l.args.id === id)
+        .filter((l) => {
+          const k = `${l.transactionHash}:${l.eventName}:${String(l.args.index ?? "")}`;
+          return seen.has(k) ? false : (seen.add(k), true);
+        })
+        .sort((a, b) => (a.blockNumber < b.blockNumber ? -1 : a.blockNumber > b.blockNumber ? 1 : 0))
         .map((l) => ({ event: l.eventName, hash: l.transactionHash, blockNumber: l.blockNumber, index: typeof l.args.index === "bigint" ? Number(l.args.index) : undefined }));
     },
-    refetchInterval: 15_000,
-    retry: 0,
+    staleTime: 30_000,
+    retry: 1,
   });
 }
 

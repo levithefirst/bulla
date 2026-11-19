@@ -83,13 +83,10 @@ export async function latestTimestamp(rpc: Requester): Promise<bigint> {
 
 export type DecodedLog = { eventName: string; args: Record<string, unknown>; transactionHash: Hex; blockNumber: bigint };
 
-export async function getLogs(rpc: Requester, address: Address, abi: Abi, fromBlock: bigint): Promise<DecodedLog[]> {
-  const logs = (await rpc.request({ method: "eth_getLogs", params: [{ address, fromBlock: `0x${fromBlock.toString(16)}`, toBlock: "latest" }] })) as {
-    data: Hex;
-    topics: [Hex, ...Hex[]];
-    transactionHash: Hex;
-    blockNumber: Hex;
-  }[];
+type RawLog = { data: Hex; topics: [Hex, ...Hex[]]; transactionHash: Hex; blockNumber: Hex; logIndex?: Hex };
+const hex = (n: bigint) => `0x${n.toString(16)}`;
+
+function decodeLogs(abi: Abi, logs: RawLog[]): DecodedLog[] {
   const out: DecodedLog[] = [];
   for (const l of logs) {
     try {
@@ -100,6 +97,114 @@ export async function getLogs(rpc: Requester, address: Address, abi: Abi, fromBl
     }
   }
   return out;
+}
+
+/** All logs from fromBlock to latest in one call. Works on nodes without a range limit (local Hardhat). */
+export async function getLogs(rpc: Requester, address: Address, abi: Abi, fromBlock: bigint): Promise<DecodedLog[]> {
+  const logs = (await rpc.request({ method: "eth_getLogs", params: [{ address, fromBlock: hex(fromBlock), toBlock: "latest" }] })) as RawLog[];
+  return decodeLogs(abi, logs);
+}
+
+/**
+ * The public X Layer RPCs (rpc.xlayer.tech, xlayerrpc.okx.com, and the testnet ones) reject eth_getLogs when
+ * toBlock - fromBlock > 100 ("block range greater than 100 max", measured 19 Nov 2026).
+ */
+export const MAX_LOG_RANGE = 100n;
+
+/** Logs in [from, to], split into windows the public RPC accepts. Optional topics filter. */
+export async function getLogsChunked(rpc: Requester, address: Address, abi: Abi, from: bigint, to: bigint, topics?: (Hex | null)[], concurrency = 4): Promise<DecodedLog[]> {
+  const windows: [bigint, bigint][] = [];
+  for (let a = from; a <= to; a += MAX_LOG_RANGE + 1n) windows.push([a, a + MAX_LOG_RANGE > to ? to : a + MAX_LOG_RANGE]);
+  const results: RawLog[][] = new Array(windows.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < windows.length) {
+      const k = next++;
+      const [a, b] = windows[k];
+      results[k] = (await rpc.request({ method: "eth_getLogs", params: [{ address, fromBlock: hex(a), toBlock: hex(b), ...(topics ? { topics } : {}) }] })) as RawLog[];
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, windows.length) }, worker));
+  return decodeLogs(abi, results.flat());
+}
+
+export async function blockNumber(rpc: Requester): Promise<bigint> {
+  return hexToBigInt((await rpc.request({ method: "eth_blockNumber" })) as Hex);
+}
+
+/** First block in [lo, hi] whose timestamp is >= ts (hi if none). Interpolation with a bisection fallback: a few calls on ~1 s blocks. */
+export async function blockAtTimestamp(rpc: Requester, ts: bigint, lo: bigint, hi: bigint, cache = new Map<bigint, bigint>()): Promise<bigint> {
+  const tsOf = async (n: bigint) => {
+    const c = cache.get(n);
+    if (c !== undefined) return c;
+    const b = (await rpc.request({ method: "eth_getBlockByNumber", params: [hex(n), false] })) as { timestamp: Hex } | null;
+    if (!b) throw new Error(`Block ${n} not returned by the RPC.`);
+    const t = hexToBigInt(b.timestamp);
+    cache.set(n, t);
+    return t;
+  };
+  let tLo = await tsOf(lo);
+  if (tLo >= ts) return lo;
+  let tHi = await tsOf(hi);
+  if (tHi < ts) return hi;
+  // Invariant: ts(lo) < ts <= ts(hi).
+  let bisect = false;
+  for (let i = 0; hi - lo > 1 && i < 64; i++) {
+    const before = hi - lo;
+    let mid = !bisect && tHi > tLo ? lo + ((ts - tLo) * (hi - lo)) / (tHi - tLo) : (lo + hi) / 2n;
+    if (mid <= lo) mid = lo + 1n;
+    if (mid >= hi) mid = hi - 1n;
+    const t = await tsOf(mid);
+    if (t < ts) (lo = mid), (tLo = t);
+    else (hi = mid), (tHi = t);
+    // Interpolation that does not halve the bracket (uneven block times) is followed by one bisection step.
+    bisect = !bisect && (hi - lo) * 2n > before;
+  }
+  return hi;
+}
+
+/**
+ * Logs for one invoice id (the first indexed topic of every invoice event) without scanning the whole chain:
+ * each known on-chain timestamp (createdAt, fundedAt, submittedAt, closedAt) is mapped to its block, and only a
+ * small window around that block is queried.
+ */
+export async function getInvoiceLogsAt(rpc: Requester, address: Address, abi: Abi, id: bigint, timestamps: bigint[], deployBlock: bigint): Promise<DecodedLog[]> {
+  const head = await blockNumber(rpc);
+  const cache = new Map<bigint, bigint>();
+  const starts = new Set<bigint>();
+  for (const ts of [...new Set(timestamps.filter((t) => t > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
+    const b = await blockAtTimestamp(rpc, ts, deployBlock, head, cache);
+    starts.add(b > deployBlock ? b - 1n : b);
+  }
+  // Merge overlapping windows so each block range is read once.
+  const windows: [bigint, bigint][] = [];
+  for (const s of [...starts].sort((a, b) => (a < b ? -1 : 1))) {
+    const e = s + MAX_LOG_RANGE > head ? head : s + MAX_LOG_RANGE;
+    const last = windows[windows.length - 1];
+    if (last && s <= last[1] + 1n) last[1] = e > last[1] ? e : last[1];
+    else windows.push([s, e]);
+  }
+  const topics: (Hex | null)[] = [null, `0x${id.toString(16).padStart(64, "0")}` as Hex];
+  const out: DecodedLog[] = [];
+  for (const [a, b] of windows) out.push(...(await getLogsChunked(rpc, address, abi, a, b, topics)));
+  return out;
+}
+
+/** Try each requester in order (primary RPC, then the documented fallback). */
+export function withFallback(...rpcs: Requester[]): Requester {
+  return {
+    async request(args) {
+      let last: unknown;
+      for (const r of rpcs) {
+        try {
+          return await r.request(args);
+        } catch (e) {
+          last = e;
+        }
+      }
+      throw last;
+    },
+  };
 }
 
 export type Receipt = { status: "success" | "reverted"; blockNumber: bigint; logs: { data: Hex; topics: [Hex, ...Hex[]] }[] };

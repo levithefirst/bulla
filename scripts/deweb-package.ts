@@ -22,6 +22,7 @@ const web = path.join(root, "web");
 const out = path.join(root, "deweb-out");
 const site = path.join(out, "site");
 const network = process.env.DEWEB_NETWORK || "xlayerMainnet";
+const JUDGE_URL = "https://try-usebulla.vercel.app";
 
 // TapeKit handbook §6
 const CHUNK = 24_000;
@@ -61,13 +62,24 @@ const tankKey = process.env.VITE_DEMO_GAS_TANK_KEY;
 const b = spawnSync("npx", ["vite", "build", "--emptyOutDir"], {
   cwd: web,
   stdio: "inherit",
-  env: { ...process.env, VITE_BULLA_NETWORK: network, VITE_MOCK: "0", VITE_DEMO_GAS_TANK_KEY: network === "xlayerMainnet" ? "" : (tankKey ?? "") },
+  env: {
+    ...process.env,
+    VITE_BULLA_NETWORK: network,
+    VITE_MOCK: "0",
+    VITE_DEMO_GAS_TANK_KEY: network === "xlayerMainnet" ? "" : (tankKey ?? ""),
+    // The mainnet mirror's "Try it now on X Layer testnet" CTA must open the hosted testnet judge build.
+    VITE_JUDGE_URL: process.env.VITE_JUDGE_URL || (network === "xlayerMainnet" ? JUDGE_URL : ""),
+  },
 });
 if (b.status !== 0) process.exit(b.status ?? 1);
 
+// Keep the record of past on-chain publishes (written by scripts/deweb-publish.mjs) across rebuilds.
+const logPath = path.join(out, "publish-log.json");
+const publishLog = fs.existsSync(logPath) ? fs.readFileSync(logPath) : null;
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(site, { recursive: true });
 fs.cpSync(path.join(web, "dist"), site, { recursive: true });
+if (publishLog) fs.writeFileSync(logPath, publishLog);
 
 const deployments = JSON.parse(fs.readFileSync(path.join(root, "contracts/deployments.json"), "utf8"));
 const escrow = deployments.networks?.[network]?.escrow ?? null;

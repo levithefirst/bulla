@@ -9,6 +9,7 @@ import { config } from "./config";
 // Route-level code splitting: the landing page ships without viem actions, react-query, or the QR encoder.
 const CreatePage = lazy(() => import("./pages/CreatePage"));
 const InvoicePage = lazy(() => import("./pages/InvoicePage"));
+const TxPage = lazy(() => import("./pages/TxPage"));
 // Judge mode is compiled only into testnet / local builds; mainnet builds drop this chunk entirely.
 const JudgePage = __JUDGE_BUILD__ ? lazy(() => import("./judge/JudgePage")) : null;
 
@@ -16,8 +17,15 @@ export function App() {
   const route = useRoute();
   const m = route.match(/^\/invoice\/([^/?]+)/);
   const demo = /[?&]escrow=demo(&|$)/.test(route);
+  const tx = route.match(/^\/tx\/([^/?]+)/);
   let page;
-  if (m)
+  if (tx)
+    page = (
+      <Suspense fallback={<ReceiptSkeleton label="Loading transaction" />}>
+        <TxPage key={route} hash={decodeURIComponent(tx[1])} />
+      </Suspense>
+    );
+  else if (m)
     page = (
       <Suspense fallback={<ReceiptSkeleton label="Loading receipt" />}>
         <InvoicePage key={route} idParam={decodeURIComponent(m[1])} demo={demo} />

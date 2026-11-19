@@ -75,4 +75,11 @@ export const config = {
 };
 
 export const explorerAddress = (a: string) => (config.explorer ? `${config.explorer}/address/${a}` : null);
-export const explorerTx = (h: string) => (config.explorer ? `${config.explorer}/tx/${h}` : null);
+/**
+ * External tx explorer: OKLink. As of 19 Nov 2026 neither OKLink nor the OKX explorer had indexed recent X Layer
+ * blocks (mainnet or testnet), so the app's own RPC receipt page (appTx) is the primary link and this is secondary.
+ */
+const OKLINK: Record<number, string> = { 196: "https://www.oklink.com/x-layer", 1952: "https://www.oklink.com/x-layer-testnet" };
+export const explorerTx = (h: string) => (OKLINK[config.chain.id] ? `${OKLINK[config.chain.id]}/tx/${h}` : null);
+/** In-app transaction receipt read straight from the chain RPC (always resolves once the tx is mined). */
+export const appTx = (h: string) => `#/tx/${h}`;

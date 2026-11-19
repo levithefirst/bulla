@@ -12,7 +12,7 @@ async function main() {
   try {
     fs.writeFileSync(path.join(root, "e2e/.runtime.json"), JSON.stringify({ rpc: s.rpc, baseURL: s.baseURL, escrow: s.escrow, token: s.token, deployBlock: s.deployBlock, tapeout: s.tapeout }, null, 2));
     console.log("\n[e2e] running Playwright");
-    const r = spawnSync("npx", ["playwright", "test", "--config", "e2e/playwright.config.ts", "--trace", "off"], { cwd: root, stdio: "inherit" });
+    const r = spawnSync("npx", ["playwright", "test", "--config", "e2e/playwright.config.ts", "--trace", "off", ...process.argv.slice(2)], { cwd: root, stdio: "inherit" });
     const ok = r.status === 0;
     console.log(`\n[e2e] RESULT: ${ok ? "PASS" : "FAIL"}`);
     process.exitCode = ok ? 0 : 1;

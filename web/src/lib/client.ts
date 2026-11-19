@@ -13,3 +13,10 @@ export const client = createClient({
   pollingInterval: config.chain.id === 1952 ? 250 : undefined,
   transport: http(config.rpcUrl, { timeout: 20_000, batch: { batchSize: 10, wait: 16 } }),
 });
+
+/**
+ * Read client on the chain's second documented public RPC (xlayerrpc.okx.com / xlayertestrpc.okx.com, from the
+ * X Layer network information page). Used as a retry target for best-effort reads. Null when VITE_RPC_URL overrides.
+ */
+const fallbackUrl = import.meta.env.VITE_RPC_URL ? undefined : config.chain.rpcUrls.default.http[1];
+export const fallbackClient = fallbackUrl ? createClient({ chain: config.chain, transport: http(fallbackUrl, { timeout: 20_000, batch: { batchSize: 10, wait: 16 } }) }) : null;

@@ -18,11 +18,13 @@ export function Layout({ children }: { children: ReactNode }) {
           </a>
           <span className="net-pill" title={`Chain id ${config.chain.id}`}>
             <span className="net-dot" aria-hidden="true" />
-            {config.chain.name}
+            <span className="net-long">{config.chain.name}</span>
+            <span className="nav-short" aria-hidden="true">{config.chain.testnet ? "Testnet" : "X Layer"}</span>
           </span>
           <nav className="nav" aria-label="Main">
-            <a href="#/create" className="nav-link">
-              New invoice
+            <a href="#/create" className="nav-link" data-testid="nav-new" aria-label="New invoice">
+              <span className="nav-long">New invoice</span>
+              <span className="nav-short" aria-hidden="true">+ New</span>
             </a>
             <ThemeToggle />
             <ConnectButton />
@@ -42,7 +44,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="footer-inner">
           <div className="footer-brand">
             <img src="./logo.png" alt="" width={20} height={20} />
-            <span>Bulla v1 · unaudited</span>
+            <span>Bulla v2 · unaudited</span>
           </div>
           <dl className="footer-meta">
             <div>

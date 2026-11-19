@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { erc20Abi, formatUnits, type Address, type Hex } from "viem";
-import { config, explorerAddress, explorerTx } from "../config";
+import { appTx, config, explorerAddress, explorerTx } from "../config";
 import { client } from "../lib/client";
 import { ethCall } from "../../../shared/rpc";
 import type { StateName } from "../lib/invoice";
@@ -248,12 +248,12 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
         <p className="eyebrow-plain">Judge mode · {config.chain.name} · real transactions, valueless DemoUSD</p>
         <h1>One tap: a full escrow, on chain.</h1>
         <p className="lead">
-          Two demo wallets are created in this browser: a Freelancer and a Client. One tap runs the whole loop on {config.chain.name}: lock the money, deliver, release. Every step is a real transaction you can
-          open on the OKX explorer.
+          Two demo wallets are created in this browser: a Freelancer and a Client. One tap runs the whole loop on {config.chain.name}: lock the money, deliver, release. Every step is a real transaction, and
+          each one links to its receipt read straight from the chain RPC.
         </p>
         <div className="cta-row">
           <button className="btn btn-primary btn-lg" onClick={run} disabled={running || tankMissing} data-testid="judge-run">
-            {running ? "Running…" : result ? "Run it again" : "Run the escrow demo"}
+            {running ? (state === "Released" ? "Finishing…" : "Running…") : result ? "Run it again" : "Run the escrow demo"}
           </button>
           <a className="btn btn-ghost" href="#/create" data-testid="judge-advanced">
             Advanced: use my own wallet
@@ -327,9 +327,14 @@ export default function JudgePage({ autoRun }: { autoRun: boolean }) {
                       </span>
                     )}
                     {s.hash && <CopyButton value={s.hash} label="Transaction hash" testid="step-copy-hash" />}
+                    {s.hash && s.status === "done" && (
+                      <a href={appTx(s.hash)} target="_blank" rel="noreferrer" data-testid="step-rpc-link" aria-label={`Open the receipt of transaction ${s.hash}, read from the RPC`}>
+                        Receipt
+                      </a>
+                    )}
                     {s.hash && explorerTx(s.hash) && (
-                      <a href={explorerTx(s.hash)!} target="_blank" rel="noreferrer" data-testid="step-explorer" aria-label={`View transaction ${s.hash} on the explorer (may lag on testnet)`}>
-                        {config.chain.id === 196 ? "OKX Explorer" : "Explorer (may lag on testnet)"}
+                      <a href={explorerTx(s.hash)!} target="_blank" rel="noreferrer" data-testid="step-explorer" aria-label={`View transaction ${s.hash} on OKLink (its testnet index lags, it may show not found)`}>
+                        OKLink (index lags)
                       </a>
                     )}
                     {s.note && <span className="muted">{s.note}</span>}

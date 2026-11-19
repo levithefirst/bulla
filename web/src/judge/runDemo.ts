@@ -325,8 +325,8 @@ async function runDemoInner(burners: Burners, hooks: Hooks): Promise<{ invoiceId
   // 4. Deliver both milestones together, then release both together. State changes below come from the confirmed receipts;
   //    the final read at the end checks them against the chain.
   const subs = await Promise.all([
-    submit("submit0", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "ipfs://bulla-judge-demo/concepts"]), gas: GAS.submit })),
-    submit("submit1", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "ipfs://bulla-judge-demo/final"]), gas: GAS.submit })),
+    submit("submit0", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 0n, keccak256(toBytes(`bulla-demo-${id}-1`)), "judge-demo: placeholder delivery, no real file (milestone 1)"]), gas: GAS.submit })),
+    submit("submit1", "freelancer", () => send(fwA, fN, { to: j.escrow, data: escrowCall("submitMilestone", [id, 1n, keccak256(toBytes(`bulla-demo-${id}-2`)), "judge-demo: placeholder delivery, no real file (milestone 2)"]), gas: GAS.submit })),
   ]);
   await Promise.all(subs.map(confirm));
   hooks.state(id, 2, [1, 1]);
