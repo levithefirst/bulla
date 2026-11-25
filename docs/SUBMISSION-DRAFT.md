@@ -10,7 +10,7 @@ Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked fr
 
 If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link (https://try-usebulla.vercel.app).
 
-Remaining placeholders for Fluid: https://youtu.be/QOdteXYtDZk and `[REPO-LINK-OR-PRIVATE]`. `npm run release:check` flags only leftover double-angle-bracket placeholders. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
+Demo video: https://youtu.be/QOdteXYtDZk. Remaining placeholder for Fluid: `[REPO-LINK-OR-PRIVATE]`. `npm run release:check` flags only leftover double-angle-bracket placeholders. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
 
 **One-liner:** Freelancers send a milestone invoice, the client locks USDC on X Layer, and each release pays the freelancer's TapeOut circuit (its holder, or straight into the circuit's container if the freelancer opts in), with a public receipt anyone can open without a wallet.
 
