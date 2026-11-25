@@ -1,6 +1,8 @@
 # Bulla demo video (2:30 to 2:50)
 
-The Demo Video is the fifth official judging criterion (https://web3.okx.com/xlayer/build-x-series): up to 3 minutes covering the problem, core features, target users and business model, and how the project uses TapeOut. This script follows `docs/planning/win-audit/WIN-AUDIT.md` section 6: a live judge-mode release in the first 10 seconds, no intro slides. Fluid records it; nothing here has been recorded. Captions on. The only statistics allowed are the approved citations in `docs/SUBMISSION-DRAFT.md`.
+The brief for the demo video guy (10-second hook, safe buttons, mainnet-tx advice, tighter shot list) is `docs/DEMO-SCRIPT.md`. This file is the longer cut. Live testnet runs take about 15 s (12 to 16 s measured), so a tap at 0:00 will not hit Released before 0:10; see the hook section in the brief.
+
+The Demo Video is the fifth official judging criterion (https://web3.okx.com/xlayer/build-x-series): up to 3 minutes covering the problem, core features, target users and business model, and how the project uses TapeOut. This script follows `docs/planning/win-audit/WIN-AUDIT.md` section 6: open on a live release, no intro slides. Because a live testnet run takes about 15 s, land the Released card in the hook by cutting to the end of a run (see `docs/DEMO-SCRIPT.md`), not by claiming the tap finishes in under 10 s. Fluid records it; nothing here has been recorded. Captions on. The only statistics allowed are the approved citations in `docs/SUBMISSION-DRAFT.md`.
 
 **Label the chain on screen at all times.** Testnet footage carries the overlay "X Layer testnet"; mainnet footage carries "X Layer mainnet · real USDC". Never imply testnet is mainnet.
 
