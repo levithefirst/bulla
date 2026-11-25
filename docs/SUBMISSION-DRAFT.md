@@ -10,7 +10,7 @@ Submission draft for X Layer TapeOut Accelerate. Form: the Google Form linked fr
 
 If the form has only one URL field, put https://usebulla.vercel.app there and lead the description with the demo link (https://try-usebulla.vercel.app).
 
-Remaining placeholders for Fluid: `[VIDEO-URL]` and `[REPO-LINK-OR-PRIVATE]`. `npm run release:check` flags only leftover double-angle-bracket placeholders. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
+Remaining placeholders for Fluid: https://youtu.be/QOdteXYtDZk and `[REPO-LINK-OR-PRIVATE]`. `npm run release:check` flags only leftover double-angle-bracket placeholders. Never fill a number that was not measured or a user who is not real (Terms, item 10: fabricated functionality or data means disqualification).
 
 **One-liner:** Freelancers send a milestone invoice, the client locks USDC on X Layer, and each release pays the freelancer's TapeOut circuit (its holder, or straight into the circuit's container if the freelancer opts in), with a public receipt anyone can open without a wallet.
 
@@ -39,7 +39,7 @@ Late payment is routine for freelancers: Bonsai's 2025 data on over 100,000 free
 | Real invoices settled (consented counterparties) | None yet from outside users. Our own mainnet tests only (not outside users): invoice #1 https://usebulla.vercel.app/#/invoice/1 (2 x 0.50 USDC, both released into the circuit container; 0.995 USDC paid, 0.005 USDC fee); invoice #2 https://usebulla.vercel.app/#/invoice/2 (0.10 USDC, one milestone, released; our own explorer-shot test). |
 | DeWEB site manifest SHA-256 | `0xc84f1bd1971b61a014e3e682dce6b4147ea8a663c9795b9f4c63ab29c404bcc6` |
 | Testnet escrow and judge escrow (optional) | `0xCb72D2798139C6Bb6e6c715E6F98c83D7DC39Ea6`, `0x6ed736ce42582a749e52fe4B95d17d95Ccc4e9b4` |
-| Demo video | `[VIDEO-URL]` |
+| Demo video | https://youtu.be/QOdteXYtDZk |
 | Code | `[REPO-LINK-OR-PRIVATE]` (repo stays private for now; Fluid has not approved making it public or issuing an access link) |
 
 A superseded v1 escrow exists on mainnet (`docs/planning/mainnet-budget.md`). Do not link it; v2 replaces it.
@@ -79,7 +79,7 @@ First commit: 14 Nov 2026 (`git log`, commit `de78f30`). All code and docs are n
 
 ## 7. Limits
 
-Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in and wallet payout is the default, because a container only works once opened (`open()`, 0.08 OKB) and withdrawing needs the holder to call `execute` with `EXEC_FEE()` attached (verified on chain, `docs/research.md` §9; a USDC withdrawal through `execute` has not been simulated end to end); releases to an unopened container fall back to the holder; the judge-mode gas key is a public, throwaway testnet key by design; judge mode uses labelled testnet stand-ins because TapeOut has no testnet deployment. Without an arbiter, the buyer can refund every unreleased milestone after the due date, including milestones the seller already submitted, so the create form recommends an arbiter and a due date with review time. A release reverts if the payee cannot receive the token (for example a USDC-blacklisted address; the fee recipient too); the milestone then stays in escrow and is still refundable to the buyer after the due date. The on-chain activity counters (`circuitStats`) count funded invoices only, but a seller can fund invoices from a wallet they control, so they show activity, not reputation.
+Unaudited v2 (Slither: 0 high, 0 medium); paying into the container is opt-in and wallet payout is the default, because a container only works once opened (`open()`, 0.08 OKB) and withdrawing needs the holder to call `execute` with `EXEC_FEE()` attached (verified on chain, `docs/research.md` §9; a USDC withdrawal through `execute` has not been simulated end to end); releases to an unopened container fall back to the holder; judge-mode gas is paid by a rate-limited server relayer holding a testnet-only key (no key ships in the app); judge mode uses labelled testnet stand-ins because TapeOut has no testnet deployment. Without an arbiter, the buyer can refund every unreleased milestone after the due date, including milestones the seller already submitted, so the create form recommends an arbiter and a due date with review time. A release reverts if the payee cannot receive the token (for example a USDC-blacklisted address; the fee recipient too); the milestone then stays in escrow and is still refundable to the buyer after the due date. The on-chain activity counters (`circuitStats`) count funded invoices only, but a seller can fund invoices from a wallet they control, so they show activity, not reputation.
 
 ## The problem (approved citations only)
 
@@ -106,7 +106,7 @@ Source: https://web3.okx.com/xlayer/build-x-series (five criteria, re-read 18 No
 | Innovation | "Your TapeOut circuit is your business account": billing is gated by `ownerOf`, payouts follow the circuit or land in its container, and the circuit carries public on-chain activity |
 | Ecosystem Integration | TapeOut processor, factory, opener and container reads on X Layer; DeWEB and the TapeKit gateway; native USDC; OKX Wallet; in-app RPC receipts, with OKLink as a secondary link (its X Layer index may lag) |
 | Product Readiness and UX | One tap runs the full loop on X Layer testnet (about 15 s, live runs 12 to 16 s); live mainnet escrow and receipts; 91 Hardhat tests, 17 E2E tests, Slither notes |
-| Demo Video (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut) | `[VIDEO-URL]`, script in `docs/DEMO-SCRIPT.md` (longer cut in `docs/DEMO.md`): the Released moment and measured ~15 s timer, in-app RPC receipt of the payout, our own mainnet invoice #1, the business model on screen |
+| Demo Video (up to 3 minutes: problem, core features, target users and business model, how it uses TapeOut) | https://youtu.be/QOdteXYtDZk, script in `docs/DEMO-SCRIPT.md` (longer cut in `docs/DEMO.md`): the Released moment and measured ~15 s timer, in-app RPC receipt of the payout, our own mainnet invoice #1, the business model on screen |
 
 ## Risks and honesty notes
 
